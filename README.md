@@ -291,11 +291,16 @@ bb hooks history [--limit n] [--hook id] | bb hooks history clear
 
 ## Showcase
 
-**Marketplace** — search, category chips, a start-here row, and a card per
-template with author, events and tags. Install opens a dialog with About,
-Install and What it runs.
+**Marketplace** — search, category chips, sorting, a start-here row, and
+listings grouped by category as cards or as a compact list. Browsing one
+catalog shows its banner. Install opens a dialog with About, Install and
+What it runs.
 
-![Marketplace tab](assets/screenshots/marketplace.png)
+![Marketplace tab grouped by category](assets/screenshots/marketplace.png)
+
+![Marketplace list view](assets/screenshots/marketplace-list.png)
+
+![Browsing one catalog](assets/screenshots/marketplace-source.png)
 
 ![Template dialog with the install form](assets/screenshots/template-dialog.png)
 
