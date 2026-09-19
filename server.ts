@@ -476,10 +476,23 @@ export default async function plugin(bb: BbPluginApi) {
       if (!result.ok) throw new Error(result.message);
       return { hooks: result.hooks, replaced: result.replaced, secrets: result.secrets };
     },
+    async hook_save(hook) {
+      await store.upsert(hook);
+      return hook;
+    },
     async hook_set_enabled({ id, enabled }) {
       const hook = await store.setEnabled(id, enabled);
       if (hook === null) throw new Error(`No hook with id "${id}"`);
       return hook;
+    },
+    async settings_set_enabled({ enabled }) {
+      const next = await settings.experimental_set({ enabled });
+      return { enabled: next.enabled };
+    },
+    history_clear() {
+      const removed = history.clear();
+      notify("history");
+      return { removed };
     },
     hook_remove: ({ id }) => removeHook(actionDeps, id),
     async hook_test({ id, threadId }) {

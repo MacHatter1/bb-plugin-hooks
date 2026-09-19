@@ -103,9 +103,22 @@ export const rpcContract = defineRpcContract({
       .strict(),
     output: z.object({ hooks: z.array(hookSchema), replaced: z.array(z.string()), secrets: z.array(z.string()) }),
   },
+  /** Create or replace a hand-written hook; the input is validated by the same schema as the setting. */
+  hook_save: {
+    input: hookSchema,
+    output: hookSchema,
+  },
   hook_set_enabled: {
     input: z.object({ id: z.string(), enabled: z.boolean() }).strict(),
     output: hookSchema,
+  },
+  settings_set_enabled: {
+    input: z.object({ enabled: z.boolean() }).strict(),
+    output: z.object({ enabled: z.boolean() }),
+  },
+  history_clear: {
+    input: z.null(),
+    output: z.object({ removed: z.number() }),
   },
   hook_remove: {
     input: z.object({ id: z.string() }).strict(),

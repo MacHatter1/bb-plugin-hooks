@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="version: 0.1.0" src="https://img.shields.io/badge/version-0.1.0-6d5cff?style=flat-square">
+  <img alt="version: 0.2.0" src="https://img.shields.io/badge/version-0.2.0-6d5cff?style=flat-square">
   <img alt="bb: 0.43+" src="https://img.shields.io/badge/bb-0.43%2B-3b82f6?style=flat-square">
   <img alt="templates: 12 bundled" src="https://img.shields.io/badge/templates-12%20bundled-10b981?style=flat-square">
-  <img alt="tests: 59" src="https://img.shields.io/badge/tests-59-ef4444?style=flat-square">
+  <img alt="tests: 61" src="https://img.shields.io/badge/tests-61-ef4444?style=flat-square">
   <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square">
 </p>
 
@@ -38,18 +38,28 @@ bb hooks add slack --event thread.failed --url https://hooks.slack.com/triggers/
 
 ## The Hooks page
 
-The plugin adds a **Hooks** page to the BB sidebar with four tabs:
+The plugin adds a **Hooks** page to the BB sidebar. A stats strip shows
+installed hooks, runs in the last 24 hours with failures, and marketplace
+size; the title bar holds the master switch (Running / Paused) and a refresh.
 
 - **Marketplace** — every template from the built-in set and your catalogs,
-  searchable and filterable by source and kind. Install opens a form for the
-  template's parameters (secret fields are stored encrypted), the events to
-  run on, optional filters, and shows exactly what the hook runs. Catalog
-  templates need an explicit trust confirmation.
-- **Installed** — your hooks with enable/disable, Test (shows status,
-  decision, stdout/stderr and the payload), remove, and the recent run log.
-- **Sources** — the catalogs the marketplace reads, add/refresh/remove, and
-  how to publish your own.
-- **Secrets** — encrypted values hooks reference as `{{secret:name}}`.
+  with search (`/` focuses it), category chips (Notify, Integrate, Automate,
+  Guard, Observe), source and kind filters, and a "start here" row. Each
+  card opens a dialog with About, Install (parameters, events, filters,
+  hook id) and What it runs. Catalog templates need an explicit trust
+  confirmation. Cards show how many hooks you already have from them.
+- **Installed** — hooks grouped into gates and reacting hooks, each with an
+  on/off switch, last-run status, Test (status, decision, output, payload),
+  Edit, Remove, and expandable details. **New hook** opens an editor for
+  your own command or webhook with event, filters, timeout and gate
+  behaviour, validated like the setting. The run log below is live, filterable
+  by hook and failures, and opens the full output per row.
+- **Sources** — catalogs as cards with template counts, status and homepage,
+  add by `owner/repo`, URL or alias, refresh, browse, remove.
+- **Secrets** — encrypted values with the hooks that use them, rotate in
+  place, copy the `{{secret:name}}` placeholder.
+- **Reference** — events, payload, environment variables, gate decisions,
+  placeholders and the CLI on one page.
 
 Everything the page does is also available from `bb hooks`, and the page
 updates live when hooks change from the CLI or an agent.

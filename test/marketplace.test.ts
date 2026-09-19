@@ -253,3 +253,38 @@ describe("marketplace page RPC", () => {
     expect(history[0]?.hookId).toBe("block-pattern");
   });
 });
+
+describe("page-only RPC methods", () => {
+  const { bb, harness } = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
+  beforeAll(async () => {
+    await plugin(bb);
+  });
+  afterAll(async () => {
+    await harness.lifecycle.dispose();
+  });
+
+  it("saves hand-written hooks with the same validation as the setting", async () => {
+    const saved = (await harness.behavior.callRpc("hook_save", { id: "mine", event: "thread.idle", command: "echo hi", description: "Mine" })) as { id: string; enabled: boolean };
+    expect(saved).toMatchObject({ id: "mine", enabled: true });
+    const listed = JSON.parse((await harness.behavior.runCli(["show", "mine"])).stdout);
+    expect(listed).toMatchObject({ id: "mine", command: "echo hi", description: "Mine", enabled: true });
+    await expect(harness.behavior.callRpc("hook_save", { id: "Bad Id", event: "thread.idle", command: "x" })).rejects.toThrow();
+    await expect(harness.behavior.callRpc("hook_save", { id: "no-target", event: "thread.idle" })).rejects.toMatchObject({
+      issues: expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining("command or a url") })]),
+    });
+    await expect(harness.behavior.callRpc("hook_save", { id: "bad-gate", event: "thread.idle", command: "x", onError: "reject" })).rejects.toMatchObject({
+      issues: expect.arrayContaining([expect.objectContaining({ message: expect.stringContaining("onError") })]),
+    });
+  });
+
+  it("flips the master switch and clears history", async () => {
+    expect(((await harness.behavior.callRpc("overview")) as { enabled: boolean }).enabled).toBe(true);
+    expect(await harness.behavior.callRpc("settings_set_enabled", { enabled: false })).toEqual({ enabled: false });
+    expect(((await harness.behavior.callRpc("overview")) as { enabled: boolean }).enabled).toBe(false);
+    await harness.behavior.callRpc("settings_set_enabled", { enabled: true });
+    await harness.behavior.callRpc("hook_test", { id: "mine" });
+    expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as unknown[]).length).toBe(1);
+    expect(await harness.behavior.callRpc("history_clear")).toEqual({ removed: 1 });
+    expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as unknown[]).length).toBe(0);
+  });
+});

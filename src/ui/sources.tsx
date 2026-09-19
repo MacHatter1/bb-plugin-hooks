@@ -1,12 +1,12 @@
-// The Sources tab: catalogs the marketplace reads, and how to publish one.
+// The Sources tab: catalogs as cards, add by alias or reference, publish help.
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import { Badge, Code, EmptyState, SectionTitle, errorMessage, formatWhen, useOverview } from "./shared";
+import { Chip, Code, EmptyState, IconBox, SectionTitle, StatusDot, errorMessage, formatWhen, useOverview } from "./shared";
 
-export function SourcesTab() {
+export function SourcesTab({ onBrowse }: { onBrowse: (source: string) => void }) {
   const { data, rpc, refetch } = useOverview();
   const [source, setSource] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export function SourcesTab() {
       toast.success(success);
       refetch();
     } catch (cause) {
-      toast.error(errorMessage(cause));
+      toast.error(errorMessage(cause).replace(/^rpc handler failed: /, ""));
     } finally {
       setPending(null);
     }
@@ -30,26 +30,41 @@ export function SourcesTab() {
     void call("add", () => rpc.call("catalog_add", { source: value }), `Added catalog ${value}`).then(() => setSource(""));
   };
 
-  if (data === null) return <EmptyState>Loading…</EmptyState>;
+  if (data === null) return <EmptyState icon="Loading" title="Loading…" />;
   const aliases = Object.keys(data.aliases);
+  const configured = new Set(data.catalogs.map((record) => record.url));
   return (
     <div className="space-y-6">
       <section className="space-y-2">
-        <SectionTitle>Add a catalog</SectionTitle>
+        <SectionTitle hint="A catalog is a hooks-catalog.json at an https URL or at the root of a GitHub repository. Its templates appear in the Marketplace and need your confirmation before they run.">Add a catalog</SectionTitle>
         <form onSubmit={add} className="flex items-center gap-2">
-          <Input value={source} onChange={(event) => setSource(event.target.value)} placeholder="owner/repo, https://…/hooks-catalog.json, or starter" aria-label="Catalog source" />
+          <div className="relative flex-1">
+            <Icon name="Puzzle" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={source} onChange={(event) => setSource(event.target.value)} placeholder="owner/repo, owner/repo@v1.0.0, or https://…/hooks-catalog.json" aria-label="Catalog source" className="pl-8" />
+          </div>
           <Button type="submit" disabled={pending !== null || source.trim() === ""}>
             <Icon name="Plus" className="size-4" />
             {pending === "add" ? "Adding…" : "Add"}
           </Button>
         </form>
-        <p className="text-xs text-muted-foreground">
-          A catalog is a <code>hooks-catalog.json</code> at an https URL or at the root of a GitHub repository ({aliases.length > 0 ? `alias${aliases.length === 1 ? "" : "es"}: ${aliases.join(", ")}` : "no aliases"}). Templates from catalogs are installed only after you confirm what they run.
-        </p>
+        {aliases.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            <span>Shortcuts:</span>
+            {aliases.map((alias) => (
+              <Chip key={alias} active={configured.has(data.aliases[alias] ?? "")} onClick={() => setSource(alias)} icon="Star">
+                {alias}
+              </Chip>
+            ))}
+            <Chip active={false} onClick={() => setSource("MacHatter1/bb-hooks-marketplace")} icon="Github">
+              community
+            </Chip>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-2">
         <SectionTitle
+          hint="Refreshed every six hours and whenever you ask."
           actions={
             <Button type="button" size="sm" variant="ghost" disabled={pending !== null || data.catalogs.length === 0} onClick={() => void call("refresh", () => rpc.call("catalog_refresh", {}), "Catalogs refreshed")}>
               <Icon name="RotateCcw" className="size-3.5" />
@@ -57,42 +72,72 @@ export function SourcesTab() {
             </Button>
           }
         >
-          Catalogs
+          Catalogs <span className="font-normal text-muted-foreground">({data.catalogs.length})</span>
         </SectionTitle>
         {data.catalogs.length === 0 ? (
-          <EmptyState>No catalogs yet. Add one above.</EmptyState>
+          <EmptyState icon="Puzzle" title="No catalogs yet">
+            Add one above. The built-in templates are always available.
+          </EmptyState>
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-            {data.catalogs.map((record) => (
-              <li key={record.url} className="flex items-center gap-3 px-4 py-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium">{record.catalog?.name ?? record.name ?? "unknown"}</span>
-                    <Badge>{record.catalog?.templates.length ?? 0} templates</Badge>
-                    {record.error ? <Badge tone="warn">{record.error}</Badge> : <Badge tone="ok">ok</Badge>}
-                    <span className="text-xs text-muted-foreground">fetched {formatWhen(record.fetchedAt)}</span>
+          <div className="grid gap-3 md:grid-cols-2">
+            {data.catalogs.map((record) => {
+              const name = record.catalog?.name ?? record.name ?? "unknown";
+              const count = record.catalog?.templates.length ?? 0;
+              const gates = record.catalog?.templates.filter((template) => template.kind === "gate").length ?? 0;
+              return (
+                <article key={record.url} className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-start gap-3">
+                    <IconBox name={record.url.includes("github") ? "Github" : "Globe"} tone="accent" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-sm font-semibold">{name}</span>
+                        {record.catalog?.version ? <span className="text-xs text-muted-foreground">v{record.catalog.version}</span> : null}
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                          <StatusDot status={record.error ? "error" : "ok"} />
+                          {record.error ? record.error : `fetched ${formatWhen(record.fetchedAt)}`}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{record.catalog?.description ?? "No description."}</p>
+                      <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground" title={record.url}>
+                        {record.url}
+                      </p>
+                    </div>
                   </div>
-                  {record.catalog?.description ? <p className="text-xs text-muted-foreground">{record.catalog.description}</p> : null}
-                  <p className="truncate font-mono text-[11px] text-muted-foreground" title={record.url}>
-                    {record.url}
-                  </p>
-                </div>
-                <Button type="button" size="sm" variant="ghost" disabled={pending !== null} onClick={() => void call(record.url, () => rpc.call("catalog_refresh", { source: record.url }), "Catalog refreshed")}>
-                  Refresh
-                </Button>
-                <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" aria-label={`Remove ${record.url}`} disabled={pending !== null} onClick={() => void call(record.url, () => rpc.call("catalog_remove", { source: record.url }), "Catalog removed")}>
-                  <Icon name="Trash2" className="size-4" />
-                </Button>
-              </li>
-            ))}
-          </ul>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {count} template{count === 1 ? "" : "s"}
+                      {gates > 0 ? ` · ${gates} gate${gates === 1 ? "" : "s"}` : ""}
+                      {record.catalog?.homepage ? (
+                        <>
+                          {" · "}
+                          <a href={record.catalog.homepage} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+                            homepage
+                          </a>
+                        </>
+                      ) : null}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button type="button" size="sm" variant="outline" onClick={() => onBrowse(name)} disabled={count === 0}>
+                        Browse
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" disabled={pending !== null} onClick={() => void call(record.url, () => rpc.call("catalog_refresh", { source: record.url }), "Catalog refreshed")}>
+                        <Icon name="RotateCcw" className="size-3.5" />
+                      </Button>
+                      <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" aria-label={`Remove ${name}`} disabled={pending !== null} onClick={() => void call(record.url, () => rpc.call("catalog_remove", { source: record.url }), "Catalog removed")}>
+                        <Icon name="Trash2" className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
       </section>
 
       <section className="space-y-2">
-        <SectionTitle>Publish your own</SectionTitle>
-        <p className="text-xs text-muted-foreground">Put a hooks-catalog.json at the root of a GitHub repo; anyone can then add it as owner/repo. Start from the built-in example and turn existing hooks into templates:</p>
-        <Code>{"bb hooks marketplace init --name my-hooks > hooks-catalog.json\nbb hooks export <hook-id>            # a template from an installed hook\nbb hooks marketplace validate owner/repo"}</Code>
+        <SectionTitle hint="Put a hooks-catalog.json at the root of a GitHub repository; anyone can then add it as owner/repo.">Publish your own</SectionTitle>
+        <Code>{"bb hooks marketplace init --name my-hooks > hooks-catalog.json\nbb hooks export <hook-id>              # turn an installed hook into a template\nbb hooks marketplace validate owner/repo"}</Code>
       </section>
     </div>
   );

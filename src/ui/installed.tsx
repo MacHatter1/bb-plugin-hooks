@@ -1,24 +1,72 @@
-// The Installed tab: every hook with enable, test and remove, plus recent runs.
-import { useCallback, useEffect, useState } from "react";
-import { useRealtime } from "@get-bb/plugin-sdk/app";
+// The Installed tab: hooks with switches, last-run status, details, editing,
+// and the run log with filters.
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
-import { Badge, Code, EmptyState, SectionTitle, compact, errorMessage, formatWhen, shortEvent, targetOf, useOverview, type HookRow, type RunRecordRow, type TestResultRow } from "./shared";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { HookEditor } from "./hook-editor";
+import {
+  Chip,
+  Code,
+  EmptyState,
+  EventPill,
+  IconBox,
+  SectionTitle,
+  SourceBadge,
+  StatusDot,
+  compact,
+  errorMessage,
+  formatDuration,
+  formatWhen,
+  iconForHook,
+  lastRunByHook,
+  matchText,
+  targetOf,
+  useHistory,
+  useOverview,
+  type HookRow,
+  type RunRecordRow,
+  type TestResultRow,
+} from "./shared";
 
-export function InstalledTab({ onBrowse }: { onBrowse: () => void }) {
+export function InstalledTab({ onBrowse, openEditor, onEditorHandled }: { onBrowse: () => void; openEditor?: boolean; onEditorHandled?: () => void }) {
   const { data, rpc, refetch } = useOverview();
+  const { runs, reload } = useHistory();
+  const lastRuns = useMemo(() => lastRunByHook(runs), [runs]);
+  const [query, setQuery] = useState("");
+  const [only, setOnly] = useState<"all" | "gate" | "observe" | "disabled">("all");
+  const [editing, setEditing] = useState<HookRow | null | "new">(openEditor ? "new" : null);
   const [testing, setTesting] = useState<{ hook: HookRow; result: TestResultRow } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  if (openEditor && editing !== "new") setEditing("new");
+
+  const hooks = data?.hooks ?? [];
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return hooks.filter((hook) => {
+      if (only === "gate" && hook.event !== "message.dispatch") return false;
+      if (only === "observe" && hook.event === "message.dispatch") return false;
+      if (only === "disabled" && hook.enabled) return false;
+      if (needle === "") return true;
+      return [hook.id, hook.event, hook.description ?? "", hook.command ?? "", hook.url ?? "", hook.template?.id ?? ""].join("\n").toLowerCase().includes(needle);
+    });
+  }, [hooks, query, only]);
+  const gates = visible.filter((hook) => hook.event === "message.dispatch");
+  const reacts = visible.filter((hook) => hook.event !== "message.dispatch");
 
   const run = async (hook: HookRow) => {
     setBusy(hook.id);
     try {
       const result = await rpc.call("hook_test", { id: hook.id });
       setTesting({ hook, result });
-      refetch();
+      reload();
     } catch (cause) {
       toast.error(errorMessage(cause));
     } finally {
@@ -42,154 +90,345 @@ export function InstalledTab({ onBrowse }: { onBrowse: () => void }) {
       toast.error(errorMessage(cause));
     }
   };
+  const closeEditor = () => {
+    setEditing(null);
+    onEditorHandled?.();
+  };
 
-  if (data === null) return <EmptyState>Loading…</EmptyState>;
+  if (data === null) return <EmptyState icon="Loading" title="Loading…" />;
   return (
     <div className="space-y-6">
-      {!data.enabled ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">Hooks are switched off in the plugin settings (Run hooks). Nothing will fire until it is on.</p>
-      ) : null}
       {data.hooksError !== null ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">The hooks setting is invalid and no hooks are active: {data.hooksError}</p>
+        <p className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <Icon name="AlertTriangle" className="mt-0.5 size-3.5 shrink-0" />
+          The hooks setting is invalid and no hooks are active: {data.hooksError}
+        </p>
       ) : null}
-      <section className="space-y-2">
-        <SectionTitle>Installed hooks</SectionTitle>
-        {data.hooks.length === 0 ? (
-          <EmptyState>
-            No hooks yet.{" "}
-            <button type="button" className="text-foreground underline underline-offset-4" onClick={onBrowse}>
-              Browse the marketplace
-            </button>{" "}
-            or run <code>bb hooks add</code>.
+
+      <section className="space-y-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <Icon name="Search" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter installed hooks" aria-label="Filter hooks" className="pl-8" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <Chip active={only === "all"} onClick={() => setOnly("all")} count={hooks.length}>
+              All
+            </Chip>
+            <Chip active={only === "observe"} onClick={() => setOnly("observe")} icon="Zap" count={hooks.filter((hook) => hook.event !== "message.dispatch").length}>
+              Reacts
+            </Chip>
+            <Chip active={only === "gate"} onClick={() => setOnly("gate")} icon="SecurityCheck" count={hooks.filter((hook) => hook.event === "message.dispatch").length}>
+              Gates
+            </Chip>
+            <Chip active={only === "disabled"} onClick={() => setOnly("disabled")} icon="Pause" count={hooks.filter((hook) => !hook.enabled).length}>
+              Off
+            </Chip>
+          </div>
+          <Button type="button" onClick={() => setEditing("new")}>
+            <Icon name="Plus" className="size-4" />
+            New hook
+          </Button>
+        </div>
+
+        {hooks.length === 0 ? (
+          <EmptyState
+            icon="Zap"
+            title="No hooks yet"
+            action={
+              <div className="flex gap-2">
+                <Button type="button" onClick={onBrowse}>
+                  <Icon name="Puzzle" className="size-4" />
+                  Browse the marketplace
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setEditing("new")}>
+                  <Icon name="Terminal" className="size-4" />
+                  Write your own
+                </Button>
+              </div>
+            }
+          >
+            Install a ready-made hook in one click, or bind any event to your own command or webhook.
           </EmptyState>
+        ) : visible.length === 0 ? (
+          <EmptyState icon="Search" title="No hooks match" />
         ) : (
-          <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-            {data.hooks.map((hook) => (
-              <HookItem key={hook.id} hook={hook} busy={busy === hook.id} onToggle={(enabled) => void toggle(hook, enabled)} onTest={() => void run(hook)} onRemove={() => void remove(hook)} />
-            ))}
-          </ul>
+          <div className="space-y-4">
+            {gates.length > 0 ? <HookGroup title="Gates" hint="Run before every message reaches an agent" hooks={gates} lastRuns={lastRuns} busy={busy} onToggle={toggle} onTest={run} onEdit={setEditing} onRemove={remove} /> : null}
+            {reacts.length > 0 ? <HookGroup title="Reacts to events" hint="Run after the fact; they never block a thread" hooks={reacts} lastRuns={lastRuns} busy={busy} onToggle={toggle} onTest={run} onEdit={setEditing} onRemove={remove} /> : null}
+          </div>
         )}
       </section>
-      <RecentRuns />
+
+      <RunLog runs={runs} hooks={hooks} onReload={reload} />
+
+      {editing === null ? null : <HookEditor hook={editing === "new" ? null : editing} onClose={closeEditor} onSaved={closeEditor} />}
       {testing === null ? null : <TestDialog hook={testing.hook} result={testing.result} onClose={() => setTesting(null)} />}
     </div>
   );
 }
 
-function HookItem({ hook, busy, onToggle, onTest, onRemove }: { hook: HookRow; busy: boolean; onToggle: (enabled: boolean) => void; onTest: () => void; onRemove: () => void }) {
+function HookGroup({ title, hint, hooks, lastRuns, busy, onToggle, onTest, onEdit, onRemove }: { title: string; hint: string; hooks: HookRow[]; lastRuns: Map<string, RunRecordRow>; busy: string | null; onToggle: (hook: HookRow, enabled: boolean) => void; onTest: (hook: HookRow) => void; onEdit: (hook: HookRow) => void; onRemove: (hook: HookRow) => void }) {
+  return (
+    <section className="space-y-2">
+      <SectionTitle hint={hint}>
+        {title} <span className="font-normal text-muted-foreground">({hooks.length})</span>
+      </SectionTitle>
+      <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+        {hooks.map((hook) => (
+          <HookItem key={hook.id} hook={hook} lastRun={lastRuns.get(hook.id)} busy={busy === hook.id} onToggle={(enabled) => onToggle(hook, enabled)} onTest={() => onTest(hook)} onEdit={() => onEdit(hook)} onRemove={() => onRemove(hook)} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function HookItem({ hook, lastRun, busy, onToggle, onTest, onEdit, onRemove }: { hook: HookRow; lastRun: RunRecordRow | undefined; busy: boolean; onToggle: (enabled: boolean) => void; onTest: () => void; onEdit: () => void; onRemove: () => void }) {
+  const { data } = useOverview();
   const [confirm, setConfirm] = useState(false);
   const [open, setOpen] = useState(false);
-  const match = hook.match ? Object.entries(hook.match).map(([key, value]) => `${key}=${value}`).join("  ") : "";
+  const gate = hook.event === "message.dispatch";
+  const match = matchText(hook);
   return (
-    <li className="space-y-1.5 px-4 py-3 text-sm">
+    <li className={cn("px-4 py-3 text-sm", !hook.enabled && "bg-muted/40")}>
       <div className="flex items-center gap-3">
-        <Checkbox checked={hook.enabled} onCheckedChange={(value) => onToggle(value === true)} aria-label={`${hook.enabled ? "Disable" : "Enable"} ${hook.id}`} />
+        <Switch checked={hook.enabled} onCheckedChange={onToggle} aria-label={`${hook.enabled ? "Disable" : "Enable"} ${hook.id}`} />
+        <IconBox name={iconForHook(hook, data?.templates ?? [])} tone={gate ? "gate" : "neutral"} className={cn("size-8", !hook.enabled && "opacity-50")} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-sm text-foreground">{hook.id}</span>
-            <Badge tone={hook.event === "message.dispatch" ? "warn" : "neutral"}>{shortEvent(hook.event)}</Badge>
-            {hook.template ? <Badge tone="accent">{hook.template.source && hook.template.source !== "bundled" ? `${hook.template.source}/` : ""}{hook.template.id}</Badge> : null}
-            {!hook.enabled ? <Badge>disabled</Badge> : null}
+            <span className={cn("font-mono text-sm", hook.enabled ? "text-foreground" : "text-muted-foreground line-through")}>{hook.id}</span>
+            <EventPill event={hook.event} className={gate ? "bg-destructive/10 text-destructive" : undefined} />
+            {hook.template ? <SourceBadge source={hook.template.source ?? "bundled"} /> : null}
+            {hook.template ? <span className="text-[11px] text-muted-foreground">from {hook.template.id}</span> : null}
           </div>
-          <button type="button" className="mt-0.5 block max-w-full truncate text-left font-mono text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen((value) => !value)} title="Show the full command">
-            {compact(targetOf(hook))}
+          <button type="button" className="mt-0.5 block max-w-full truncate text-left font-mono text-xs text-muted-foreground hover:text-foreground" onClick={() => setOpen((value) => !value)} title="Show details">
+            {hook.description ? `${hook.description} · ` : ""}
+            {compact(targetOf(hook), 100)}
           </button>
-          {match !== "" ? <div className="font-mono text-[11px] text-muted-foreground">{match}</div> : null}
+          {match !== "" ? <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">{match}</div> : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Button type="button" size="sm" variant="outline" onClick={onTest} disabled={busy}>
-            <Icon name="Play" className="size-3.5" />
-            {busy ? "Running…" : "Test"}
-          </Button>
+        <div className="hidden w-36 shrink-0 text-right text-xs text-muted-foreground lg:block">
+          {lastRun ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1.5">
+                  <StatusDot status={lastRun.status} />
+                  {lastRun.status === "ok" ? "ok" : lastRun.status} · {formatWhen(lastRun.startedAt)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {lastRun.event} in {formatDuration(lastRun.durationMs)}
+                {lastRun.decision ? ` → ${lastRun.decision}` : ""}
+                {lastRun.error ? ` (${lastRun.error})` : ""}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot status="idle" />
+              never ran
+            </span>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" size="icon" variant="ghost" className="size-8" aria-label={`Test ${hook.id}`} onClick={onTest} disabled={busy}>
+                <Icon name={busy ? "Loading" : "Play"} className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Run with a sample payload</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" size="icon" variant="ghost" className="size-8" aria-label={`Edit ${hook.id}`} onClick={onEdit}>
+                <Icon name="Edit" className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit</TooltipContent>
+          </Tooltip>
           {confirm ? (
             <>
               <Button type="button" size="sm" variant="destructive" onClick={onRemove}>
-                Confirm
+                Remove
               </Button>
               <Button type="button" size="sm" variant="ghost" onClick={() => setConfirm(false)}>
                 Keep
               </Button>
             </>
           ) : (
-            <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" aria-label={`Remove ${hook.id}`} onClick={() => setConfirm(true)}>
-              <Icon name="Trash2" className="size-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-destructive" aria-label={`Remove ${hook.id}`} onClick={() => setConfirm(true)}>
+                  <Icon name="Trash2" className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Remove</TooltipContent>
+            </Tooltip>
           )}
+          <Button type="button" size="icon" variant="ghost" className="size-8" aria-label={open ? "Hide details" : "Show details"} onClick={() => setOpen((value) => !value)}>
+            <Icon name={open ? "ChevronUp" : "ChevronDown"} className="size-4" />
+          </Button>
         </div>
       </div>
       {open ? (
-        <Code>
-          {targetOf(hook)}
-          {hook.body ? `\nbody: ${hook.body}` : ""}
-          {hook.headers ? `\nheaders: ${JSON.stringify(hook.headers)}` : ""}
-        </Code>
+        <div className="mt-3 grid gap-3 pl-[4.25rem] text-xs md:grid-cols-[1fr_14rem]">
+          <Code>
+            {targetOf(hook)}
+            {hook.body ? `\nbody: ${hook.body}` : ""}
+            {hook.headers ? `\nheaders: ${JSON.stringify(hook.headers)}` : ""}
+            {hook.cwd ? `\ncwd: ${hook.cwd}` : ""}
+          </Code>
+          <dl className="space-y-1.5 text-muted-foreground">
+            <div>
+              <dt className="font-medium text-foreground">Timeout</dt>
+              <dd>{hook.timeoutMs ?? (gate ? 8000 : 30000)} ms{gate ? ` · on error: ${hook.onError ?? "proceed"}` : ""}</dd>
+            </div>
+            {hook.template ? (
+              <div>
+                <dt className="font-medium text-foreground">Template settings</dt>
+                <dd>
+                  {Object.entries(hook.template.params).length === 0 && !hook.template.secrets ? "none" : null}
+                  {Object.entries(hook.template.params).map(([key, value]) => (
+                    <span key={key} className="block truncate font-mono">
+                      {key} = {value}
+                    </span>
+                  ))}
+                  {Object.entries(hook.template.secrets ?? {}).map(([key, name]) => (
+                    <span key={key} className="block truncate font-mono">
+                      {key} = 🔒 {name}
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            ) : null}
+            {lastRun ? (
+              <div>
+                <dt className="font-medium text-foreground">Last run</dt>
+                <dd>
+                  {lastRun.status}
+                  {lastRun.exitCode !== null ? ` (exit ${lastRun.exitCode})` : ""}
+                  {lastRun.httpStatus !== null ? ` (HTTP ${lastRun.httpStatus})` : ""} · {formatDuration(lastRun.durationMs)} · {formatWhen(lastRun.startedAt)}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
       ) : null}
     </li>
   );
 }
 
-function RecentRuns() {
+function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks: HookRow[]; onReload: () => void }) {
   const { rpc } = useOverview();
-  const [runs, setRuns] = useState<RunRecordRow[] | null>(null);
-  const load = useCallback(() => {
-    rpc.call("history_list", { limit: 25 }).then(setRuns, (cause) => toast.error(errorMessage(cause)));
-  }, [rpc]);
-  useEffect(() => {
-    load();
-  }, [load]);
-  // Every hook run records a row and the server announces it; keep the log live.
-  useRealtime("hooks-changed", load);
+  const [hookFilter, setHookFilter] = useState("all");
+  const [status, setStatus] = useState<"all" | "ok" | "failed">("all");
+  const [selected, setSelected] = useState<RunRecordRow | null>(null);
+  const hookIds = useMemo(() => [...new Set([...hooks.map((hook) => hook.id), ...(runs ?? []).map((run) => run.hookId)])].sort(), [hooks, runs]);
+  const visible = useMemo(
+    () => (runs ?? []).filter((run) => (hookFilter === "all" || run.hookId === hookFilter) && (status === "all" || (status === "ok" ? run.status === "ok" : run.status !== "ok"))).slice(0, 50),
+    [runs, hookFilter, status],
+  );
+  const clear = async () => {
+    try {
+      const result = await rpc.call("history_clear");
+      toast.success(`Cleared ${result.removed} run${result.removed === 1 ? "" : "s"}`);
+      onReload();
+    } catch (cause) {
+      toast.error(errorMessage(cause));
+    }
+  };
   return (
     <section className="space-y-2">
       <SectionTitle
+        hint="Every hook run, newest first, kept live. Click a row for the full output."
         actions={
-          <Button type="button" size="sm" variant="ghost" onClick={load}>
-            <Icon name="RotateCcw" className="size-3.5" />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Select value={hookFilter} onValueChange={setHookFilter}>
+              <SelectTrigger className="h-8 w-40" aria-label="Filter by hook">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All hooks</SelectItem>
+                {hookIds.map((id) => (
+                  <SelectItem key={id} value={id}>
+                    {id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Chip active={status === "failed"} onClick={() => setStatus(status === "failed" ? "all" : "failed")} icon="AlertTriangle">
+              Failures
+            </Chip>
+            <Button type="button" size="sm" variant="ghost" onClick={clear} disabled={(runs?.length ?? 0) === 0}>
+              Clear
+            </Button>
+          </div>
         }
       >
-        Recent runs
+        Run log
       </SectionTitle>
       {runs === null ? (
-        <EmptyState>Loading…</EmptyState>
-      ) : runs.length === 0 ? (
-        <EmptyState>No runs yet. Runs appear here as events fire or when you press Test.</EmptyState>
+        <EmptyState icon="Loading" title="Loading…" />
+      ) : visible.length === 0 ? (
+        <EmptyState icon="Clock" title={runs.length === 0 ? "No runs yet" : "No runs match"}>
+          {runs.length === 0 ? "Runs appear here as events fire, or when you press Test on a hook." : undefined}
+        </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-xs">
-            <thead className="bg-muted text-left text-muted-foreground">
-              <tr>
-                <th className="px-3 py-1.5 font-medium">When</th>
-                <th className="px-3 py-1.5 font-medium">Hook</th>
-                <th className="px-3 py-1.5 font-medium">Event</th>
-                <th className="px-3 py-1.5 font-medium">Status</th>
-                <th className="px-3 py-1.5 font-medium">Decision</th>
-                <th className="px-3 py-1.5 font-medium">Output</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {runs.map((run) => (
-                <tr key={run.id} className="align-top">
-                  <td className="whitespace-nowrap px-3 py-1.5 text-muted-foreground">{formatWhen(run.startedAt)}</td>
-                  <td className="whitespace-nowrap px-3 py-1.5 font-mono">{run.hookId}</td>
-                  <td className="whitespace-nowrap px-3 py-1.5 font-mono text-muted-foreground">{shortEvent(run.event)}</td>
-                  <td className="whitespace-nowrap px-3 py-1.5">
-                    <Badge tone={run.status === "ok" ? "ok" : "warn"}>
+        <div className="overflow-hidden rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-28">When</TableHead>
+                <TableHead>Hook</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead className="w-32">Result</TableHead>
+                <TableHead>Output</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((run) => (
+                <TableRow key={run.id} className="cursor-pointer" onClick={() => setSelected(run)}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatWhen(run.startedAt)}</TableCell>
+                  <TableCell className="font-mono text-xs">{run.hookId}</TableCell>
+                  <TableCell className="text-xs">
+                    <EventPill event={run.event} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">
+                    <span className="inline-flex items-center gap-1.5">
+                      <StatusDot status={run.status} />
                       {run.status}
                       {run.exitCode !== null ? ` ${run.exitCode}` : run.httpStatus !== null ? ` ${run.httpStatus}` : ""}
-                    </Badge>{" "}
-                    <span className="text-muted-foreground">{run.durationMs} ms</span>
-                  </td>
-                  <td className="px-3 py-1.5 text-muted-foreground">{run.decision ?? ""}</td>
-                  <td className="max-w-[16rem] truncate px-3 py-1.5 font-mono text-muted-foreground" title={run.error ?? run.output}>
-                    {compact(run.error ?? run.output, 80)}
-                  </td>
-                </tr>
+                      <span className="text-muted-foreground">· {formatDuration(run.durationMs)}</span>
+                    </span>
+                  </TableCell>
+                  <TableCell className="max-w-[18rem] truncate font-mono text-xs text-muted-foreground">{run.decision ? `${run.decision} · ` : ""}{compact(run.error ?? run.output, 90)}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
+      )}
+      {selected === null ? null : (
+        <Dialog open onOpenChange={(value) => (value ? undefined : setSelected(null))}>
+          <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                {selected.hookId} · {selected.event}
+              </DialogTitle>
+              <DialogDescription>
+                {new Date(selected.startedAt).toLocaleString()} · {selected.status}
+                {selected.exitCode !== null ? ` (exit ${selected.exitCode})` : ""}
+                {selected.httpStatus !== null ? ` (HTTP ${selected.httpStatus})` : ""} · {formatDuration(selected.durationMs)}
+                {selected.threadId ? ` · thread ${selected.threadId}` : ""}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              {selected.error ? <p className="text-destructive">{selected.error}</p> : null}
+              {selected.decision ? <p>Decision: {selected.decision}</p> : null}
+              <Code>{selected.output.trim() === "" ? "(no output)" : selected.output}</Code>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </section>
   );
@@ -198,14 +437,17 @@ function RecentRuns() {
 function TestDialog({ hook, result, onClose }: { hook: HookRow; result: TestResultRow; onClose: () => void }) {
   const { outcome, decision } = result;
   return (
-    <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
+    <Dialog open onOpenChange={(value) => (value ? undefined : onClose())}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Test run: {hook.id}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <StatusDot status={outcome.status} />
+            Test run: {hook.id}
+          </DialogTitle>
           <DialogDescription>
             {outcome.status === "ok" ? "Ran" : outcome.status === "timeout" ? "Timed out" : "Failed"}
             {outcome.exitCode !== null ? ` with exit ${outcome.exitCode}` : ""}
-            {outcome.httpStatus !== null ? ` with HTTP ${outcome.httpStatus}` : ""} in {outcome.durationMs} ms, using a sample payload.
+            {outcome.httpStatus !== null ? ` with HTTP ${outcome.httpStatus}` : ""} in {formatDuration(outcome.durationMs)}, using a sample payload.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
@@ -228,10 +470,10 @@ function TestDialog({ hook, result, onClose }: { hook: HookRow; result: TestResu
               <Code>{outcome.stderr.trimEnd()}</Code>
             </div>
           ) : null}
-          <div className="space-y-1">
-            <span className="text-xs font-medium">Payload the hook received</span>
-            <Code>{JSON.stringify(result.payload, null, 2)}</Code>
-          </div>
+          <details className="text-xs">
+            <summary className="cursor-pointer text-muted-foreground">Payload the hook received</summary>
+            <Code className="mt-1">{JSON.stringify(result.payload, null, 2)}</Code>
+          </details>
         </div>
       </DialogContent>
     </Dialog>
