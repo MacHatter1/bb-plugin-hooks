@@ -238,7 +238,7 @@ function describeTemplate(entry: RegistryEntry, full: boolean): string {
         template.params.map((param) => [
           param.key,
           param.required ? "required" : `default ${JSON.stringify(param.default ?? "")}`,
-          `${param.label}${param.secret ? " [stored encrypted]" : ""}${param.description ? ` — ${param.description}` : ""}`,
+          `${param.label}${param.secret ? " [stored encrypted]" : ""}${param.type === "agent" ? " [inherit, a provider id, or JSON {providerId, model, reasoningLevel}]" : ""}${param.description ? ` — ${param.description}` : ""}`,
         ]),
         ["KEY", "VALUE", "MEANING"],
       )

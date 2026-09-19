@@ -75,7 +75,13 @@ or `{"action":"proceed"}`. Gate hooks must answer within 8 seconds.
 - **environment**: `BB_HOOK_EVENT`, `BB_HOOK_ID`, `BB_THREAD_ID`,
   `BB_PROJECT_ID`, `BB_PROVIDER_ID`, `BB_THREAD_TITLE`, `BB_THREAD_STATUS`,
   `BB_SERVER_URL`; gate hooks also get `BB_DISPATCH_ATTEMPT`, `BB_MODEL` and
-  `BB_MESSAGE_TEXT` (first 1000 characters).
+  `BB_MESSAGE_TEXT` (first 1000 characters). Observe hooks whose command
+  mentions `BB_MODEL`, `BB_REASONING_LEVEL`, `BB_SERVICE_TIER` or
+  `BB_PERMISSION_MODE` also get the triggering thread's execution settings.
+- Template settings of type `agent` take `inherit`, a provider id, or JSON
+  `{providerId, model, reasoningLevel}`; in a command they expand to
+  `{{agent.mode}}`, `{{agent.providerId}}`, `{{agent.model}}`,
+  `{{agent.reasoningLevel}}` and `{{agent.serviceTier}}`.
 - Webhooks get `x-bb-hooks-event` and `x-bb-hooks-id` headers, and when the
   plugin's webhook secret is set, `x-bb-hooks-timestamp` and
   `x-bb-hooks-signature: sha256=<hmac of "<timestamp>.<body>">`.

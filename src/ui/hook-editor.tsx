@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { HookInput } from "../definitions";
+import { AgentField } from "./agent-field";
 import { EventPill, Field, IconBox, KindBadge, SourceBadge, errorMessage, iconForTemplate, useOverview, type HookRow, type TemplateEntry } from "./shared";
 import { Icon } from "@/components/ui/icon";
 
@@ -125,17 +126,21 @@ function TemplateHookEditor({ hook, entry, onClose, onSaved, onRaw }: { hook: Ho
                 {template.params.map((param) => (
                   <Field
                     key={param.key}
-                    className={!param.secret && (stored[param.key] ?? param.default ?? "").length > 40 ? "sm:col-span-2" : undefined}
+                    className={param.type === "agent" || (!param.secret && (stored[param.key] ?? param.default ?? "").length > 40) ? "sm:col-span-2" : undefined}
                     label={`${param.label}${param.required ? "" : " (optional)"}`}
                     hint={[param.description, param.secret ? (secretNames[param.key] ? "Stored encrypted. Leave blank to keep the current value." : "Stored encrypted.") : null].filter(Boolean).join(" ")}
                   >
-                    <Input
-                      type={param.secret ? "password" : param.type === "integer" ? "number" : "text"}
-                      value={params[param.key] ?? ""}
-                      onChange={(formEvent) => setParams((prev) => ({ ...prev, [param.key]: formEvent.target.value }))}
-                      placeholder={param.secret && secretNames[param.key] ? "••••••  (unchanged)" : (param.default ?? "")}
-                      autoComplete="off"
-                    />
+                    {param.type === "agent" ? (
+                      <AgentField value={params[param.key] ?? "inherit"} onChange={(next) => setParams((prev) => ({ ...prev, [param.key]: next }))} />
+                    ) : (
+                      <Input
+                        type={param.secret ? "password" : param.type === "integer" ? "number" : "text"}
+                        value={params[param.key] ?? ""}
+                        onChange={(formEvent) => setParams((prev) => ({ ...prev, [param.key]: formEvent.target.value }))}
+                        placeholder={param.secret && secretNames[param.key] ? "••••••  (unchanged)" : (param.default ?? "")}
+                        autoComplete="off"
+                      />
+                    )}
                   </Field>
                 ))}
               </div>

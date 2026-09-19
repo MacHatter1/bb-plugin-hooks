@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-hooks",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "User-defined hooks: run shell commands or call webhooks when BB threads change state, and gate message dispatch.",
   "license": "MIT",

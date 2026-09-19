@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { AgentField } from "./agent-field";
 import {
   CATEGORIES,
   Chip,
@@ -419,17 +420,21 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
                     {template.params.map((param) => (
                       <Field
                         key={param.key}
-                        className={param.type === "string" && !param.secret && (param.default ?? "").length > 40 ? "sm:col-span-2" : undefined}
+                        className={param.type === "agent" || (param.type === "string" && !param.secret && (param.default ?? "").length > 40) ? "sm:col-span-2" : undefined}
                         label={`${param.label}${param.required ? "" : " (optional)"}`}
                         hint={[param.description, param.secret ? "Stored encrypted, never written into the hook." : null].filter(Boolean).join(" ")}
                       >
-                        <Input
-                          type={param.secret ? "password" : param.type === "integer" ? "number" : "text"}
-                          value={params[param.key] ?? ""}
-                          onChange={(event) => setParams((prev) => ({ ...prev, [param.key]: event.target.value }))}
-                          placeholder={param.default ?? ""}
-                          autoComplete="off"
-                        />
+                        {param.type === "agent" ? (
+                          <AgentField value={params[param.key] ?? "inherit"} onChange={(next) => setParams((prev) => ({ ...prev, [param.key]: next }))} />
+                        ) : (
+                          <Input
+                            type={param.secret ? "password" : param.type === "integer" ? "number" : "text"}
+                            value={params[param.key] ?? ""}
+                            onChange={(event) => setParams((prev) => ({ ...prev, [param.key]: event.target.value }))}
+                            placeholder={param.default ?? ""}
+                            autoComplete="off"
+                          />
+                        )}
                       </Field>
                     ))}
                   </div>

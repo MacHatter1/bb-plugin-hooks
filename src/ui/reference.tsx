@@ -66,9 +66,12 @@ BB_ENVIRONMENT_ID    env_…            (when known)
 BB_PARENT_THREAD_ID  thr_…            (child threads only)
 BB_SERVER_URL        http://127.0.0.1:38886
 BB_CLI               absolute path to the bb binary
+BB_MODEL             the thread's model      (gate hooks always; observe
+BB_REASONING_LEVEL   … reasoning level        hooks when the command
+BB_SERVICE_TIER      … service tier           mentions the variable)
+BB_PERMISSION_MODE   … permission mode
 BB_MESSAGE_TEXT      gate hooks: the message (first 1000 chars)
-BB_DISPATCH_ATTEMPT  gate hooks: start-turn | join-turn
-BB_MODEL             gate hooks: the model, when resolved`}</Code>
+BB_DISPATCH_ATTEMPT  gate hooks: start-turn | join-turn`}</Code>
         </div>
       </section>
 

@@ -10,10 +10,10 @@
 </p>
 
 <p align="center">
-  <img alt="version: 0.2.0" src="https://img.shields.io/badge/version-0.2.0-6d5cff?style=flat-square">
+  <img alt="version: 0.3.0" src="https://img.shields.io/badge/version-0.3.0-6d5cff?style=flat-square">
   <img alt="bb: 0.43+" src="https://img.shields.io/badge/bb-0.43%2B-3b82f6?style=flat-square">
   <img alt="templates: 12 bundled" src="https://img.shields.io/badge/templates-12%20bundled-10b981?style=flat-square">
-  <img alt="tests: 61" src="https://img.shields.io/badge/tests-61-ef4444?style=flat-square">
+  <img alt="tests: 66" src="https://img.shields.io/badge/tests-66-ef4444?style=flat-square">
   <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square">
 </p>
 
@@ -91,8 +91,8 @@ into ordinary hooks you can edit, test, and remove like any other.
 | `slack`, `discord`, `telegram` | observe | Chat message with the thread title and the last reply or error. |
 | `webhook` | observe | Raw event JSON to any URL, signed when the secret is set. |
 | `log-to-file` | observe | One JSON line per event appended to a file. |
-| `follow-up` | observe | When a thread finishes, spawn a new thread in the same workspace with your prompt plus its output. |
-| `review` | observe | `follow-up` preset as a strict code reviewer, ideally on a different provider. |
+| `follow-up` | observe | When a thread finishes, spawn a new thread in the same workspace with your prompt plus its output. Its "Who runs it" setting is either the same provider and model as the finished thread or one you pick with BB's model picker. |
+| `review` | observe | `follow-up` preset as a strict code reviewer; pick a different provider than the author for a real second opinion. |
 | `block-pattern` | gate | Reject messages matching a regular expression, with your reason. |
 | `office-hours` | gate | Hold messages outside a daily window until it opens. |
 
@@ -241,8 +241,11 @@ carries `project`, `environment`, `host`, `attempt`, `input.text`,
 `requestedExecution` and `queuedMessage`.
 
 Environment: `BB_HOOK_EVENT`, `BB_HOOK_ID`, `BB_THREAD_ID`, `BB_PROJECT_ID`,
-`BB_PROVIDER_ID`, `BB_THREAD_TITLE`, `BB_THREAD_STATUS`, `BB_SERVER_URL`, and
-for gate hooks `BB_DISPATCH_ATTEMPT`, `BB_MODEL`, `BB_MESSAGE_TEXT`.
+`BB_PROVIDER_ID`, `BB_THREAD_TITLE`, `BB_THREAD_STATUS`, `BB_SERVER_URL`,
+`BB_CLI`, and for gate hooks `BB_DISPATCH_ATTEMPT` and `BB_MESSAGE_TEXT`. The
+triggering thread's execution settings, `BB_MODEL`, `BB_REASONING_LEVEL`,
+`BB_SERVICE_TIER` and `BB_PERMISSION_MODE`, are set for gate hooks and for any
+observe hook whose command mentions them.
 
 Webhook headers: `x-bb-hooks-event`, `x-bb-hooks-id`, and with the
 **Webhook signing secret** setting, `x-bb-hooks-timestamp` and

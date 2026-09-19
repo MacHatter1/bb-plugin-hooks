@@ -190,3 +190,36 @@ describe("bb hooks use", () => {
     expect(await harness.behavior.runCli(["use", "nope"])).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("No template") });
   });
 });
+
+describe("agent parameters", () => {
+  const runner = createRunner();
+
+  it("expands inherit and picked agents into shell parts", () => {
+    const inherit = renderOne("follow-up", { prompt: "continue" });
+    expect(inherit.template?.params).toEqual({ prompt: "continue", agent: "inherit" });
+    expect(inherit.command).toContain("mode='inherit'; provider=''; model=''; reasoning=''; tier=''");
+    const picked = renderOne("follow-up", { prompt: "continue", agent: '{"providerId":"codex","model":"gpt-5.5","reasoningLevel":"high"}' });
+    expect(picked.command).toContain("mode='pick'; provider='codex'; model='gpt-5.5'; reasoning='high'; tier=''");
+    const byProvider = renderOne("review", { agent: "codex" });
+    expect(byProvider.template?.params.agent).toBe('{"providerId":"codex"}');
+    expect(byProvider.command).toContain("provider='codex'; model=''");
+  });
+
+  it("rejects agent values that are none of inherit, a provider id or JSON", () => {
+    const template = findTemplate("follow-up")!;
+    expect(renderTemplate(template, { prompt: "x", agent: "not a provider!" })).toMatchObject({ error: expect.stringContaining("agent") });
+    expect(renderTemplate(template, { prompt: "x", agent: '{"model":"m"}' })).toMatchObject({ error: expect.stringContaining("providerId") });
+  });
+
+  it("inherit uses the triggering thread's execution from the environment", async () => {
+    const hook = renderOne("follow-up", { prompt: "continue" });
+    const probe: HookDefinition = { ...hook, command: hook.command!.replace(/"\$bb" thread spawn "\$@".*$/m, 'printf "%s|" "$@"').replace(/output=\$\(.*$/m, "output=x") };
+    const outcome = await runner.run({
+      hook: probe,
+      payload: {},
+      env: { BB_THREAD_ID: "thr_p", BB_PROJECT_ID: "proj_p", BB_PROVIDER_ID: "claude-code", BB_MODEL: "claude-opus-5", BB_REASONING_LEVEL: "xhigh", BB_SERVICE_TIER: "default", BB_ENVIRONMENT_ID: "env_p", BB_CLI: "/nonexistent" },
+      timeoutMs: 5_000,
+    });
+    expect(outcome.stdout).toBe("--project|proj_p|--parent-thread|thr_p|--environment|env_p|--provider|claude-code|--model|claude-opus-5|--reasoning-level|xhigh|--service-tier|default|");
+  });
+});

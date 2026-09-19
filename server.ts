@@ -372,6 +372,28 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
+  const EXECUTION_VARS = /BB_(MODEL|REASONING_LEVEL|SERVICE_TIER|PERMISSION_MODE)\b/;
+
+  /**
+   * The triggering thread's current execution settings, for hooks that
+   * mention them (an "inherit" agent, for one). One SDK call per run, only
+   * when a matching hook asks for it.
+   */
+  async function executionEnv(threadId: string): Promise<Record<string, string>> {
+    try {
+      const options = await bb.sdk.threads.defaultExecutionOptions({ threadId });
+      if (options === null) return {};
+      return { BB_MODEL: options.model, BB_REASONING_LEVEL: options.reasoningLevel, BB_SERVICE_TIER: options.serviceTier, BB_PERMISSION_MODE: options.permissionMode };
+    } catch (cause) {
+      bb.log.debug(`could not load execution options for ${threadId}: ${(cause as Error).message}`);
+      return {};
+    }
+  }
+
+  function wantsExecution(hook: HookDefinition): boolean {
+    return [hook.command, hook.url, hook.body, ...Object.values(hook.headers ?? {})].some((text) => text !== undefined && EXECUTION_VARS.test(text));
+  }
+
   /** Thread id for payloads that carry one without the thread DTO. */
   function referencedThreadId(payload: Record<string, unknown>): string | null {
     if (typeof payload.threadId === "string") return payload.threadId;
@@ -393,6 +415,7 @@ export default async function plugin(bb: BbPluginApi) {
     }
     const prepared = prepareObserveEvent(event, payload, fetched);
     const matching = hooks.filter((hook) => matches(hook, prepared.subject));
+    if (prepared.threadId !== null && matching.some(wantsExecution)) Object.assign(prepared.env, await executionEnv(prepared.threadId));
     await Promise.all(matching.map((hook) => execute(hook, prepared)));
   }
 
@@ -448,6 +471,7 @@ export default async function plugin(bb: BbPluginApi) {
       if (thread === null) throw new Error(`thread ${threadId} not found`);
     }
     const prepared = prepareSample(hook.event, thread);
+    if (thread !== null && wantsExecution(hook)) Object.assign(prepared.env, await executionEnv(thread.id));
     const gate = isGateEvent(hook.event);
     const startedAt = Date.now();
     const outcome = await execute(hook, prepared, { runner: gate ? gateRunner : observeRunner, signal, label: "(test)" });

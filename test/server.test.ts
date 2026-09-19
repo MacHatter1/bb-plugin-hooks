@@ -115,6 +115,24 @@ describe("observe hooks", () => {
   });
 });
 
+describe("execution settings for inherit", () => {
+  it("passes the triggering thread's model and reasoning to hooks that mention them", async () => {
+    const out = join(dir, "exec.txt");
+    harness.inspection.sdk.stub("threads.defaultExecutionOptions", async () => ({ model: "claude-opus-5", reasoningLevel: "xhigh", serviceTier: "default", permissionMode: "auto", source: "thread" }));
+    await harness.behavior.runCli(["add", "wants-model", "--event", "thread.idle", "--command", `printf '%s %s %s' "$BB_MODEL" "$BB_REASONING_LEVEL" "$BB_SERVICE_TIER" > "${out}"`]);
+    await harness.behavior.emitThreadEvent("thread.idle", { thread: makeThreadResponse({ id: "thr_exec", projectId: "proj_a" }), lastAssistantText: null });
+    await waitFor(() => existsSync(out));
+    expect(readFileSync(out, "utf8")).toBe("claude-opus-5 xhigh default");
+    expect(harness.inspection.sdk.callsTo("threads.defaultExecutionOptions").length).toBe(1);
+    // A hook that does not mention the variables costs no lookup.
+    await harness.behavior.runCli(["remove", "wants-model"]);
+    await harness.behavior.runCli(["add", "plain", "--event", "thread.idle", "--command", "true"]);
+    await harness.behavior.emitThreadEvent("thread.idle", { thread: makeThreadResponse({ id: "thr_exec2", projectId: "proj_a" }), lastAssistantText: null });
+    expect(harness.inspection.sdk.callsTo("threads.defaultExecutionOptions").length).toBe(1);
+    await harness.behavior.runCli(["remove", "plain"]);
+  });
+});
+
 describe("gate hooks", () => {
   const dispatch = () => {
     const handler = harness.registrations.hooks["message.dispatch"];

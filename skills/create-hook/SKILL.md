@@ -51,7 +51,13 @@ A template from a catalog needs `--yes`; before adding it, show the user what
   choose what happens if the command fails.
 - Chaining agents: call `"$BB_CLI" thread spawn …` from the command; the
   `follow-up` and `review` templates show the pattern, including the guard
-  that stops chains after one hop.
+  that stops chains after one hop. Their `agent` setting decides who runs
+  the new thread: `--set agent=inherit` (same provider, model and reasoning
+  as the triggering thread; the plugin passes them as `BB_MODEL`,
+  `BB_REASONING_LEVEL`, `BB_SERVICE_TIER`), `--set agent=codex` (a provider
+  with its default model), or `--set agent='{"providerId":"codex","model":"gpt-5.5","reasoningLevel":"high"}'`.
+  Ask the user which they want when it matters, for example a reviewer on a
+  different provider than the author.
 
 ## 4. Test, then hand over
 

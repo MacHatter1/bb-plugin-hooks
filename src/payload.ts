@@ -160,6 +160,9 @@ export function prepareDispatch(ctx: MessageDispatchHookContext): PreparedEvent 
   env.BB_DISPATCH_ATTEMPT = ctx.attempt;
   env.BB_PROVIDER_ID = ctx.requestedExecution.providerId;
   if (ctx.requestedExecution.model !== null) env.BB_MODEL = ctx.requestedExecution.model;
+  if (ctx.requestedExecution.reasoningLevel !== null) env.BB_REASONING_LEVEL = ctx.requestedExecution.reasoningLevel;
+  if (ctx.requestedExecution.serviceTier !== null) env.BB_SERVICE_TIER = ctx.requestedExecution.serviceTier;
+  if (ctx.requestedExecution.permissionMode !== null) env.BB_PERMISSION_MODE = ctx.requestedExecution.permissionMode;
   env.BB_MESSAGE_TEXT = ctx.input.text.slice(0, MAX_ENV_TEXT);
   return {
     event: "message.dispatch",

@@ -3,15 +3,25 @@
 // `hooks` setting like any hand-written hook.
 import { z } from "zod";
 import { GATE_EVENTS, HOOK_EVENTS, HOOK_ID_PATTERN, MAX_TIMEOUT_MS, OBSERVE_EVENTS, type HookEvent, type HookInput } from "./definitions.js";
+import { agentValueOf, parseAgentValue } from "./agent.js";
 import { SECRET_NAME_PATTERN, secretPlaceholder } from "./secrets.js";
 import { fillPlaceholders, shellQuote } from "./template.js";
+
+export { agentValueOf, parseAgentValue, type AgentChoice } from "./agent.js";
 
 export const templateParamSchema = z
   .object({
     key: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,31}$/, "param keys are letters, digits and _ (max 32)"),
     label: z.string().min(1).max(80),
     description: z.string().max(300).optional(),
-    type: z.enum(["string", "integer"]),
+    /**
+     * `agent` picks who runs a spawned thread: the value is `inherit` (same
+     * provider, model and reasoning as the triggering thread), a provider id,
+     * or JSON `{ providerId, model?, reasoningLevel?, serviceTier? }`. The
+     * template reads it as `{{key.mode}}`, `{{key.providerId}}`, `{{key.model}}`,
+     * `{{key.reasoningLevel}}` and `{{key.serviceTier}}`.
+     */
+    type: z.enum(["string", "integer", "agent"]),
     /** Text default; a param without one and with `required` must be set. */
     default: z.string().max(4096).optional(),
     required: z.boolean().optional(),
@@ -65,6 +75,9 @@ export const templateSchema = z
       if (keys.has(param.key)) ctx.addIssue({ code: "custom", path: ["params", index, "key"], message: `duplicate param "${param.key}"` });
       keys.add(param.key);
       if (param.secret && param.type !== "string") ctx.addIssue({ code: "custom", path: ["params", index, "secret"], message: "only string params can be secret" });
+      if (param.type === "agent" && param.default !== undefined && "error" in parseAgentValue(param.default)) {
+        ctx.addIssue({ code: "custom", path: ["params", index, "default"], message: "agent default must be inherit, a provider id, or JSON with providerId" });
+      }
     }
   });
 
@@ -81,14 +94,20 @@ esac`;
 
 const CHAT_TEXT = "BB {{event}} — {{thread.title}}\\n{{lastAssistantText|500}}{{error|500}}";
 
-const SPAWN_FOLLOW_UP = `prompt={{prompt}}; provider={{provider}}
+const SPAWN_FOLLOW_UP = `prompt={{prompt}}
+mode={{agent.mode}}; provider={{agent.providerId}}; model={{agent.model}}; reasoning={{agent.reasoningLevel}}; tier={{agent.serviceTier}}
 bb="\${BB_CLI:-bb}"
 # Only top-level threads chain, so a follow-up never triggers another follow-up.
 [ -n "$BB_PARENT_THREAD_ID" ] && exit 0
 output=$("$bb" thread output "$BB_THREAD_ID" 2>/dev/null | head -c 20000)
 set -- --project "$BB_PROJECT_ID" --parent-thread "$BB_THREAD_ID"
 [ -n "$BB_ENVIRONMENT_ID" ] && set -- "$@" --environment "$BB_ENVIRONMENT_ID"
+# "inherit" reuses the triggering thread's provider, model and reasoning (BB_MODEL etc. come from the plugin).
+if [ "$mode" = "inherit" ]; then provider="$BB_PROVIDER_ID"; model="$BB_MODEL"; reasoning="$BB_REASONING_LEVEL"; tier="$BB_SERVICE_TIER"; fi
 [ -n "$provider" ] && set -- "$@" --provider "$provider"
+[ -n "$model" ] && set -- "$@" --model "$model"
+[ -n "$reasoning" ] && [ "$reasoning" != "none" ] && set -- "$@" --reasoning-level "$reasoning"
+[ -n "$tier" ] && set -- "$@" --service-tier "$tier"
 "$bb" thread spawn "$@" --prompt "$(printf '%s\\n\\n---\\nOutput of thread %s:\\n%s' "$prompt" "$BB_THREAD_ID" "$output")"`;
 
 export const TEMPLATES: readonly HookTemplate[] = ([
@@ -252,7 +271,7 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
     events: ["thread.idle"],
     params: [
       { key: "prompt", label: "Prompt for the follow-up", type: "string", required: true },
-      { key: "provider", label: "Provider id", description: "Empty uses the project default.", type: "string", default: "" },
+      { key: "agent", label: "Who runs it", description: "Same provider and model as the finished thread, or pick one.", type: "agent", default: "inherit" },
     ],
     command: SPAWN_FOLLOW_UP,
     timeoutMs: 120_000,
@@ -277,7 +296,7 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
         default:
           "You are a strict code reviewer. Inspect the changes made by the previous thread in this workspace (git diff and git log), run the tests, and reply with APPROVE or REQUEST CHANGES followed by specific, actionable findings. Do not make changes.",
       },
-      { key: "provider", label: "Reviewer provider id", description: "Use a different provider than the author for a second opinion.", type: "string", default: "" },
+      { key: "agent", label: "Who reviews", description: "Pick a different provider than the author for a real second opinion, or inherit the author's.", type: "agent", default: "inherit" },
     ],
     command: SPAWN_FOLLOW_UP,
     timeoutMs: 120_000,
@@ -380,6 +399,12 @@ export function renderTemplate(
       continue;
     }
     if (param.type === "integer" && !/^-?\d+$/.test(raw.trim())) return { error: `parameter ${param.key} must be an integer, got "${raw}"` };
+    if (param.type === "agent") {
+      const choice = parseAgentValue(raw);
+      if ("error" in choice) return { error: `parameter ${param.key}: ${choice.error}` };
+      values[param.key] = agentValueOf(choice);
+      continue;
+    }
     values[param.key] = param.type === "integer" ? raw.trim() : raw;
   }
   if (missing.length > 0) return { error: `missing required parameter${missing.length === 1 ? "" : "s"}: ${missing.map((key) => `--set ${key}=…`).join(" ")}` };
@@ -413,6 +438,13 @@ export function renderTemplate(
       return [key, template.params.find((param) => param.key === key)?.type === "integer" ? value : shellQuote(value)];
     }),
   );
+  // Agent params expand into their parts so a shell script never parses JSON.
+  for (const param of template.params) {
+    if (param.type !== "agent" || values[param.key] === undefined) continue;
+    const choice = parseAgentValue(values[param.key]!);
+    if ("error" in choice) continue;
+    for (const part of ["mode", "providerId", "model", "reasoningLevel", "serviceTier"] as const) shellValues[`${param.key}.${part}`] = shellQuote(choice[part]);
+  }
   const rawValues = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, key in secretNames ? placeholderFor(key) : value]));
   const jsonValues = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, key in secretNames ? placeholderFor(key) : jsonStringContents(value)]));
 
