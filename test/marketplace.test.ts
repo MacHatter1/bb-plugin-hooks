@@ -288,3 +288,36 @@ describe("page-only RPC methods", () => {
     expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as unknown[]).length).toBe(0);
   });
 });
+
+describe("editing a template hook", () => {
+  const { bb, harness } = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
+  beforeAll(async () => {
+    await plugin(bb);
+  });
+  afterAll(async () => {
+    await harness.lifecycle.dispose();
+  });
+
+  it("re-renders with new settings, keeps a secret when referenced, and drops it when replaced", async () => {
+    await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "https://hooks.slack.test/one" }, events: ["thread.idle"], id: "slack", trusted: false });
+    let secrets = ((await harness.behavior.callRpc("overview")) as { secrets: { name: string }[] }).secrets.map((secret) => secret.name);
+    expect(secrets).toEqual(["slack/webhookUrl"]);
+
+    // Edit filters only: the secret is referenced back, not re-entered.
+    await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "secret:slack/webhookUrl" }, events: ["thread.idle"], id: "slack", match: { title: "^feat" }, trusted: true });
+    const edited = JSON.parse((await harness.behavior.runCli(["show", "slack"])).stdout);
+    expect(edited).toMatchObject({ id: "slack", event: "thread.idle", url: "{{secret:slack/webhookUrl}}", match: { title: "^feat" }, template: { secrets: { webhookUrl: "slack/webhookUrl" } } });
+    secrets = ((await harness.behavior.callRpc("overview")) as { secrets: { name: string }[] }).secrets.map((secret) => secret.name);
+    expect(secrets).toEqual(["slack/webhookUrl"]);
+
+    // Replace the secret value: same name, new value, still exactly one secret.
+    await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "https://hooks.slack.test/two" }, events: ["thread.idle"], id: "slack", trusted: true });
+    secrets = ((await harness.behavior.callRpc("overview")) as { secrets: { name: string }[] }).secrets.map((secret) => secret.name);
+    expect(secrets).toEqual(["slack/webhookUrl"]);
+
+    // Re-render under another id: the old managed secret goes away with nothing referencing it.
+    await harness.behavior.callRpc("hook_remove", { id: "slack" });
+    secrets = ((await harness.behavior.callRpc("overview")) as { secrets: { name: string }[] }).secrets.map((secret) => secret.name);
+    expect(secrets).toEqual([]);
+  });
+});

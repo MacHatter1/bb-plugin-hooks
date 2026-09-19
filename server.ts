@@ -46,9 +46,9 @@ export default async function plugin(bb: BbPluginApi) {
   const settings = bb.settings.define({
     hooks: {
       type: "string",
-      label: "Hooks (JSON array)",
+      label: "Advanced: hooks as JSON",
       description:
-        'Each entry: {"id","event","command"|"url","match"?,"timeoutMs"?,"onError"?,"enabled"?,"description"?}. `bb hooks add` writes here too.',
+        "The raw list behind the Hooks page, for copying, pasting or version control. Manage hooks on the Hooks page or with `bb hooks` instead of editing this by hand.",
       experimental_multiline: true,
       experimental_schema: hooksSettingSchema,
       default: "[]",

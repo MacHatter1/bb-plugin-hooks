@@ -254,7 +254,7 @@ function HookItem({ hook, lastRun, busy, onToggle, onTest, onEdit, onRemove }: {
                 <Icon name="Edit" className="size-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Edit</TooltipContent>
+            <TooltipContent>{hook.template ? "Edit settings" : "Edit"}</TooltipContent>
           </Tooltip>
           {confirm ? (
             <>

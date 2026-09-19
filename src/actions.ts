@@ -61,6 +61,9 @@ export async function useTemplate(deps: ActionDeps, input: UseTemplateInput): Pr
     const { created } = await deps.store.upsert(hook);
     if (!created) replaced.push(hook.id);
   }
+  // Re-rendering a hook with a new secret value leaves the old managed secret
+  // unreferenced; drop it unless a sibling hook still uses it.
+  if (replaced.length > 0) deps.secrets.gcManaged(referencedSecrets(await deps.store.list()));
   return { ok: true, entry, hooks, replaced, secrets: rendered.secrets.map((secret) => secret.name) };
 }
 

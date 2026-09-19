@@ -4,6 +4,7 @@
 // @get-bb/plugin-sdk/app are provided by the BB app at load time.
 import { definePluginApp } from "@get-bb/plugin-sdk/app";
 import { HeaderActions, HooksPage, PANEL_PATH } from "./src/ui/page";
+import { SettingsSection } from "./src/ui/settings-section";
 import { NEW_HOOK_PROMPT } from "./src/ui/shared";
 
 export default definePluginApp((app) => {
@@ -14,6 +15,14 @@ export default definePluginApp((app) => {
     path: PANEL_PATH,
     component: HooksPage,
     headerContent: HeaderActions,
+  });
+
+  // Settings → Installed plugins → Hooks: a readable view under the raw form.
+  app.slots.settingsSection({
+    id: "hooks",
+    title: "Your hooks",
+    description: "Switch hooks on or off here; install, edit, test and read the run log on the Hooks page.",
+    component: SettingsSection,
   });
 
   // The composer's "+" menu: start describing a hook from any composer.
