@@ -365,9 +365,7 @@ export function templateKey(entry: TemplateEntry): string {
 }
 
 /**
- * Seed for the thread that "New hook" opens: the agent picks up the
- * create-hook skill and the user finishes the sentence with what they want.
+ * Seed for the thread that "New hook" opens. The user finishes the sentence;
+ * the create-hook skill triggers on the request itself.
  */
-export const NEW_HOOK_PROMPT = `Use the create-hook skill to set up a new BB hook for me, then test it.
-
-I want a hook that: `;
+export const NEW_HOOK_PROMPT = "Create a new bb hook that ";
