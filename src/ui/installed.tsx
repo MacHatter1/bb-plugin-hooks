@@ -36,16 +36,15 @@ import {
   type TestResultRow,
 } from "./shared";
 
-export function InstalledTab({ onBrowse, openEditor, onEditorHandled }: { onBrowse: () => void; openEditor?: boolean; onEditorHandled?: () => void }) {
+export function InstalledTab({ onBrowse, onNewHook }: { onBrowse: () => void; onNewHook: () => void }) {
   const { data, rpc, refetch } = useOverview();
   const { runs, reload } = useHistory();
   const lastRuns = useMemo(() => lastRunByHook(runs), [runs]);
   const [query, setQuery] = useState("");
   const [only, setOnly] = useState<"all" | "gate" | "observe" | "disabled">("all");
-  const [editing, setEditing] = useState<HookRow | null | "new">(openEditor ? "new" : null);
+  const [editing, setEditing] = useState<HookRow | null | "new">(null);
   const [testing, setTesting] = useState<{ hook: HookRow; result: TestResultRow } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  if (openEditor && editing !== "new") setEditing("new");
 
   const hooks = data?.hooks ?? [];
   const visible = useMemo(() => {
@@ -90,10 +89,7 @@ export function InstalledTab({ onBrowse, openEditor, onEditorHandled }: { onBrow
       toast.error(errorMessage(cause));
     }
   };
-  const closeEditor = () => {
-    setEditing(null);
-    onEditorHandled?.();
-  };
+  const closeEditor = () => setEditing(null);
 
   if (data === null) return <EmptyState icon="Loading" title="Loading…" />;
   return (
@@ -125,10 +121,20 @@ export function InstalledTab({ onBrowse, openEditor, onEditorHandled }: { onBrow
               Off
             </Chip>
           </div>
-          <Button type="button" onClick={() => setEditing("new")}>
-            <Icon name="Plus" className="size-4" />
-            New hook
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button type="button" onClick={onNewHook}>
+              <Icon name="Plus" className="size-4" />
+              New hook
+            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button type="button" size="icon" variant="outline" className="size-9" aria-label="Write a hook by hand" onClick={() => setEditing("new")}>
+                  <Icon name="Terminal" className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Write a hook by hand instead</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         {hooks.length === 0 ? (
@@ -136,19 +142,23 @@ export function InstalledTab({ onBrowse, openEditor, onEditorHandled }: { onBrow
             icon="Zap"
             title="No hooks yet"
             action={
-              <div className="flex gap-2">
-                <Button type="button" onClick={onBrowse}>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button type="button" onClick={onNewHook}>
+                  <Icon name="Plus" className="size-4" />
+                  Describe a hook to an agent
+                </Button>
+                <Button type="button" variant="outline" onClick={onBrowse}>
                   <Icon name="Puzzle" className="size-4" />
                   Browse the marketplace
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setEditing("new")}>
+                <Button type="button" variant="ghost" onClick={() => setEditing("new")}>
                   <Icon name="Terminal" className="size-4" />
-                  Write your own
+                  Write by hand
                 </Button>
               </div>
             }
           >
-            Install a ready-made hook in one click, or bind any event to your own command or webhook.
+            Tell an agent what should happen and when, install a ready-made hook, or bind any event to your own command or webhook.
           </EmptyState>
         ) : visible.length === 0 ? (
           <EmptyState icon="Search" title="No hooks match" />

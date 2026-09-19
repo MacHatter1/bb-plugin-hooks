@@ -39,5 +39,8 @@ machine unless you point a hook at a URL.
 
 ## For agents
 
-The bundled skill teaches agents the events, the payload shape, and the
-`bb hooks` workflow: list events, add a hook, test it, check history.
+Two bundled skills: one teaches agents the events, the payload shape, and the
+`bb hooks` workflow; the other, `create-hook`, turns "tell me when a thread
+needs me" into an installed, tested hook. The New hook button on the Hooks
+page opens a thread with that skill, so people describe hooks instead of
+filling in forms.

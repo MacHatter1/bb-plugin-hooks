@@ -363,3 +363,11 @@ export function useInstalledCounts(): Map<string, number> {
 export function templateKey(entry: TemplateEntry): string {
   return `${entry.source}/${entry.template.id}`;
 }
+
+/**
+ * Seed for the thread that "New hook" opens: the agent picks up the
+ * create-hook skill and the user finishes the sentence with what they want.
+ */
+export const NEW_HOOK_PROMPT = `Use the create-hook skill to set up a new BB hook for me, then test it.
+
+I want a hook that: `;

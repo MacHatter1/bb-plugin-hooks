@@ -10,7 +10,7 @@ import { InstalledTab } from "./installed";
 import { MarketplaceTab } from "./marketplace";
 import { ReferenceTab } from "./reference";
 import { SecretsTab } from "./secrets";
-import { OverviewProvider, Stat, errorMessage, useHistory, useOverview } from "./shared";
+import { NEW_HOOK_PROMPT, OverviewProvider, Stat, errorMessage, useHistory, useOverview } from "./shared";
 import { SourcesTab } from "./sources";
 
 export const PANEL_PATH = "marketplace";
@@ -44,7 +44,7 @@ function PageBody({ subPath }: { subPath: string }) {
   const { data, error } = useOverview();
   const [tab, setTab] = useState<TabId>(() => tabFromSubPath(subPath));
   const [marketSource, setMarketSource] = useState<string | null>(null);
-  const [openEditor, setOpenEditor] = useState(false);
+  const newHook = () => navigate.toCompose({ initialPrompt: NEW_HOOK_PROMPT, focusPrompt: true });
   useEffect(() => {
     setTab(tabFromSubPath(subPath));
   }, [subPath]);
@@ -63,7 +63,7 @@ function PageBody({ subPath }: { subPath: string }) {
             {error}
           </p>
         ) : null}
-        <StatsStrip onGo={go} onNewHook={() => { setOpenEditor(true); go("installed"); }} />
+        <StatsStrip onGo={go} onNewHook={newHook} />
         <Tabs value={tab} onValueChange={(value) => go(value as TabId)}>
           <TabsList className="w-full justify-start overflow-x-auto">
             {TABS.map((item) => (
@@ -76,7 +76,7 @@ function PageBody({ subPath }: { subPath: string }) {
           </TabsList>
         </Tabs>
         {tab === "marketplace" ? <MarketplaceTab onInstalled={() => go("installed")} initialSource={marketSource} /> : null}
-        {tab === "installed" ? <InstalledTab onBrowse={() => go("marketplace")} openEditor={openEditor} onEditorHandled={() => setOpenEditor(false)} /> : null}
+        {tab === "installed" ? <InstalledTab onBrowse={() => go("marketplace")} onNewHook={newHook} /> : null}
         {tab === "sources" ? (
           <SourcesTab
             onBrowse={(source) => {
@@ -114,7 +114,7 @@ function StatsStrip({ onGo, onNewHook }: { onGo: (tab: TabId) => void; onNewHook
         </span>
         <span className="min-w-0">
           <span className="block text-sm font-medium text-foreground">New hook</span>
-          <span className="block truncate text-xs text-muted-foreground">Your own command or webhook</span>
+          <span className="block truncate text-xs text-muted-foreground">Describe it to an agent</span>
         </span>
       </button>
     </div>

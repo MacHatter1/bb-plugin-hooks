@@ -50,10 +50,12 @@ size; the title bar holds the master switch (Running / Paused) and a refresh.
   confirmation. Cards show how many hooks you already have from them.
 - **Installed** — hooks grouped into gates and reacting hooks, each with an
   on/off switch, last-run status, Test (status, decision, output, payload),
-  Edit, Remove, and expandable details. **New hook** opens an editor for
-  your own command or webhook with event, filters, timeout and gate
-  behaviour, validated like the setting. The run log below is live, filterable
-  by hook and failures, and opens the full output per row.
+  Edit, Remove, and expandable details. **New hook** opens a new thread
+  seeded with the bundled `create-hook` skill: you describe what should
+  happen and when, and the agent picks a template or writes the hook, tests
+  it with `bb hooks test`, and hands it over. A "write by hand" button opens
+  the form editor instead, which Edit also uses. The run log below is live,
+  filterable by hook and failures, and opens the full output per row.
 - **Sources** — catalogs as cards with template counts, status and homepage,
   add by `owner/repo`, URL or alias, refresh, browse, remove.
 - **Secrets** — encrypted values with the hooks that use them, rotate in
@@ -63,6 +65,17 @@ size; the title bar holds the master switch (Running / Paused) and a refresh.
 
 Everything the page does is also available from `bb hooks`, and the page
 updates live when hooks change from the CLI or an agent.
+
+## Skills for agents
+
+Two skills ship with the plugin and are injected into every agent thread:
+
+- `hooks` — the reference: events, payload, environment, `bb hooks` commands,
+  templates, secrets, and the rules an agent should follow.
+- `create-hook` — the guided flow behind the New hook button: understand
+  what the user wants, prefer a template, otherwise write the hook, test it,
+  and hand it over. An agent also uses it whenever someone asks to automate
+  something on a thread event.
 
 ## Premade hooks
 
