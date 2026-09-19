@@ -94,6 +94,9 @@ set -- --project "$BB_PROJECT_ID" --parent-thread "$BB_THREAD_ID"
 export const TEMPLATES: readonly HookTemplate[] = ([
   {
     id: "desktop-notify",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["notifications", "desktop"],
     description: "A native notification the moment an agent stops for you, finishes, or fails. Works on macOS through osascript and on Linux through notify-send. Pick a sound on macOS with --set sound=Glass.",
     name: "Desktop notification",
@@ -120,6 +123,9 @@ fi`,
   },
   {
     id: "speak",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["notifications", "desktop", "voice"],
     name: "Speak it",
     summary: "Read the event aloud with the system voice.",
@@ -142,6 +148,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "ntfy",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["notifications", "phone", "push"],
     description: "Push notifications to your phone with the free ntfy app and no account: install ntfy, subscribe to a topic, and give the same topic here. Use a long random topic name, since anyone who guesses it can read your notifications.",
     name: "Phone push via ntfy",
@@ -157,6 +166,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "slack",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["notifications", "chat", "slack"],
     description: "Posts a short message with the thread title and the last reply or error to a Slack channel. Create an Incoming Webhook in your Slack app settings and paste its URL; it is stored encrypted.",
     name: "Slack message",
@@ -170,6 +182,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "discord",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["notifications", "chat", "discord"],
     name: "Discord message",
     summary: "Post to a Discord channel through a channel webhook.",
@@ -181,6 +196,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "telegram",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["notifications", "chat", "telegram", "phone"],
     name: "Telegram message",
     summary: "Send a message from a Telegram bot to a chat.",
@@ -196,6 +214,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "webhook",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["integration", "webhook"],
     description: "Sends the complete event JSON to any HTTP endpoint: Zapier, n8n, Make, a serverless function, or your own service. Set the plugin's webhook signing secret to verify requests with x-bb-hooks-signature.",
     name: "Generic webhook",
@@ -207,6 +228,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "log-to-file",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["audit", "logging"],
     name: "Log to file",
     summary: "Append every event as one JSON line to a file on the server.",
@@ -217,6 +241,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "follow-up",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["automation", "agents", "chaining"],
     description: "Chains agents: when a thread finishes, a new thread starts in the same workspace with your prompt plus the finished thread's output. Only top-level threads trigger it, so the chain stops after one hop. Scope it with --title or --project.",
     name: "Spawn a follow-up thread",
@@ -233,6 +260,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "review",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["automation", "agents", "code-review"],
     description: "A second opinion on every finished thread: a reviewer thread inspects the diff, runs the tests, and answers APPROVE or REQUEST CHANGES. Run it on a different provider than the author for real independence.",
     name: "Automatic code review",
@@ -255,6 +285,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "block-pattern",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["gate", "policy", "safety"],
     description: "A guardrail on outgoing messages: anything matching the pattern is rejected before it reaches the agent, and the sender sees your reason. Send now on a queued message can override it.",
     name: "Block messages matching a pattern",
@@ -270,6 +303,9 @@ else echo "no speech tool found (needs say, spd-say or espeak)" >&2; exit 1; fi`
   },
   {
     id: "office-hours",
+    author: "MacHatter1",
+    version: "1.0.0",
+    homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
     tags: ["gate", "policy", "scheduling"],
     description: "Holds messages sent outside the window and sends them automatically when it opens, using the server's local time. Combine with --text '#overnight' to queue only tagged work for the night.",
     name: "Office hours",

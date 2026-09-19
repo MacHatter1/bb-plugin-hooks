@@ -19,6 +19,8 @@ export const catalogSchema = z
     description: z.string().max(500).optional(),
     version: z.string().max(64).optional(),
     homepage: z.string().url().max(2048).optional(),
+    /** Who maintains the catalog (a name or GitHub login). */
+    author: z.string().max(80).optional(),
     templates: z.array(templateSchema).max(MAX_CATALOG_TEMPLATES),
   })
   .strict()
@@ -227,6 +229,7 @@ export function starterCatalogJson(name = "my-hooks"): string {
     name,
     description: "Hook templates for the BB Hooks plugin.",
     version: "1.0.0",
+    author: "your-github-login",
     templates: [
       {
         id: "say-done",

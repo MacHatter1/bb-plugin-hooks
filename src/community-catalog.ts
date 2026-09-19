@@ -7,9 +7,13 @@ export const STARTER_CATALOG: Catalog = {
   name: "starter",
   description: "Extra hooks served by the Hooks plugin itself: a worked example of a published catalog.",
   version: "1.0.0",
+  author: "MacHatter1",
+  homepage: "https://github.com/MacHatter1/bb-plugin-hooks",
   templates: [
     {
       id: "pushover",
+      author: "MacHatter1",
+      version: "1.0.0",
       tags: ["notifications", "phone", "push"],
       name: "Pushover notification",
       summary: "Push to your phone through Pushover.",
@@ -24,6 +28,8 @@ export const STARTER_CATALOG: Catalog = {
     },
     {
       id: "home-assistant",
+      author: "MacHatter1",
+      version: "1.0.0",
       tags: ["integration", "home-automation"],
       name: "Home Assistant webhook",
       summary: "Trigger a Home Assistant automation (turn a lamp red when an agent needs you).",
@@ -35,6 +41,8 @@ export const STARTER_CATALOG: Catalog = {
     },
     {
       id: "github-issue-comment",
+      author: "MacHatter1",
+      version: "1.0.0",
       tags: ["integration", "github", "automation"],
       name: "Comment on the linked GitHub issue",
       summary: "When a thread whose title mentions #123 finishes, post its output as a comment on issue 123.",
@@ -52,6 +60,8 @@ printf '%s\\n\\n_Posted by BB hooks from thread %s._\\n' "$body" "$BB_THREAD_ID"
     },
     {
       id: "archive-when-done",
+      author: "MacHatter1",
+      version: "1.0.0",
       tags: ["automation", "housekeeping"],
       name: "Archive finished threads",
       summary: "Archive a thread as soon as it goes idle. Scope it with --title so only throwaway threads are archived.",

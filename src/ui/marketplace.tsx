@@ -220,6 +220,13 @@ function TemplateCard({ entry, installedCount, onOpen }: { entry: TemplateEntry;
             <SourceBadge source={entry.source} />
           </span>
           <span className="mt-1 block text-xs leading-5 text-muted-foreground">{template.summary}</span>
+          {template.author || template.version ? (
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              {template.author ? `by ${template.author}` : ""}
+              {template.author && template.version ? " · " : ""}
+              {template.version ? `v${template.version}` : ""}
+            </span>
+          ) : null}
           <span className="mt-2 flex flex-wrap items-center gap-1">
             {template.events.map((event) => (
               <EventPill key={event} event={event} />
@@ -326,7 +333,23 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
                 <KindBadge kind={template.kind} />
                 <SourceBadge source={entry.source} />
               </DialogTitle>
-              <DialogDescription className="mt-1">{template.summary}</DialogDescription>
+              <DialogDescription className="mt-1">
+                {template.summary}
+                {template.author ? (
+                  <span className="mt-1 block text-xs">
+                    by {template.author}
+                    {template.version ? ` · v${template.version}` : ""}
+                    {template.homepage ? (
+                      <>
+                        {" · "}
+                        <a href={template.homepage} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+                          homepage
+                        </a>
+                      </>
+                    ) : null}
+                  </span>
+                ) : null}
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>

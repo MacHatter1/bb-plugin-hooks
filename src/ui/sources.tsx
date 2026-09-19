@@ -92,6 +92,7 @@ export function SourcesTab({ onBrowse }: { onBrowse: (source: string) => void })
                       <div className="flex flex-wrap items-center gap-1.5">
                         <span className="text-sm font-semibold">{name}</span>
                         {record.catalog?.version ? <span className="text-xs text-muted-foreground">v{record.catalog.version}</span> : null}
+                        {record.catalog?.author ? <span className="text-xs text-muted-foreground">by {record.catalog.author}</span> : null}
                         <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           <StatusDot status={record.error ? "error" : "ok"} />
                           {record.error ? record.error : `fetched ${formatWhen(record.fetchedAt)}`}

@@ -227,6 +227,7 @@ function describeTemplate(entry: RegistryEntry, full: boolean): string {
     template.summary,
     "",
     `Source: ${entry.source === "bundled" ? "bundled with the plugin" : `catalog "${entry.source}" (${entry.sourceUrl ?? ""})`}`,
+    `By: ${[template.author ?? "unknown", template.version ? `v${template.version}` : null, template.homepage].filter(Boolean).join(" · ")}`,
     `Kind: ${template.kind}${template.kind === "gate" ? " (message.dispatch only)" : `; default events: ${template.events.join(", ")} (override with --event)`}`,
   ];
   if (template.params.length === 0) lines.push("Parameters: none");
@@ -276,7 +277,7 @@ function formatRun(result: TestResult, hook: HookDefinition): string {
 function formatCatalogRecord(record: CatalogRecord): string[] {
   const templates = record.catalog?.templates.length ?? 0;
   const when = record.fetchedAt === null ? "never" : new Date(record.fetchedAt).toISOString().replace("T", " ").slice(0, 16);
-  return [record.catalog?.name ?? "?", String(templates), when, record.error ?? "ok", record.url];
+  return [record.catalog?.name ?? "?", record.catalog?.author ?? "", String(templates), when, record.error ?? "ok", record.url];
 }
 
 /** Turn an existing hook into a shareable template (secrets become secret params). */
@@ -348,10 +349,10 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
           const entries = values.search === undefined ? deps.registry.list() : deps.registry.search(values.search);
           if (values.json) return json(entries);
           if (entries.length === 0) return ok(values.search === undefined ? "No templates." : `No templates match "${values.search}".`);
-          const rows = entries.map((entry) => [entry.ref, entry.source, entry.template.kind, entry.template.events.map(shortEvent).join(","), entry.template.summary]);
+          const rows = entries.map((entry) => [entry.ref, entry.source, entry.template.author ?? "", entry.template.kind, entry.template.events.map(shortEvent).join(","), entry.template.summary]);
           const sources = deps.marketplace.sources().length;
           return ok(
-            `${table(rows, ["TEMPLATE", "SOURCE", "KIND", "DEFAULT EVENTS", "WHAT IT DOES"])}\n\nDetails: bb hooks templates <template>   Create: bb hooks use <template> --set key=value` +
+            `${table(rows, ["TEMPLATE", "SOURCE", "AUTHOR", "KIND", "DEFAULT EVENTS", "WHAT IT DOES"])}\n\nDetails: bb hooks templates <template>   Create: bb hooks use <template> --set key=value` +
               (sources === 0 ? "\nMore: bb hooks marketplace add owner/repo (or `starter` for the built-in example catalog)" : ""),
           );
         }
@@ -407,7 +408,7 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
                   "Publish your own: bb hooks marketplace init > hooks-catalog.json",
               );
             }
-            return ok(table(records.map(formatCatalogRecord), ["CATALOG", "TEMPLATES", "FETCHED (UTC)", "STATUS", "URL"]));
+            return ok(table(records.map(formatCatalogRecord), ["CATALOG", "BY", "TEMPLATES", "FETCHED (UTC)", "STATUS", "URL"]));
           }
           case "add": {
             if (arg === undefined) return fail("bb hooks marketplace add needs a source: an https URL, owner/repo, or an alias");
@@ -429,7 +430,7 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
             if ("error" in result) return fail(result.error);
             if (values.json) return json(result);
             if (result.length === 0) return ok("No catalogs configured.");
-            return ok(table(result.map(formatCatalogRecord), ["CATALOG", "TEMPLATES", "FETCHED (UTC)", "STATUS", "URL"]));
+            return ok(table(result.map(formatCatalogRecord), ["CATALOG", "BY", "TEMPLATES", "FETCHED (UTC)", "STATUS", "URL"]));
           }
           case "search": {
             const query = [arg, ...rest.slice(1)].filter((part) => part !== undefined).join(" ");
