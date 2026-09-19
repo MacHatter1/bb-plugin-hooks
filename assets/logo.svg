@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="BB Hooks Marketplace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#9333ea"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="24" y="24" width="464" height="232" rx="96" fill="url(#glow)"/>
+  <!-- event node -->
+  <circle cx="300" cy="118" r="34" fill="none" stroke="#ffffff" stroke-width="26"/>
+  <!-- the hook -->
+  <path d="M300 152 V300 a70 70 0 0 1 -140 0 V262" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- barb -->
+  <path d="M160 262 l-38 40 M160 262 l38 40" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- spark: a hook firing -->
+  <path d="M392 322 l-34 62 h40 l-30 58 l74 -84 h-40 l32 -36 z" fill="#fde047"/>
+</svg>
