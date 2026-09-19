@@ -45,7 +45,24 @@ function matchesQuery(entry: TemplateEntry, query: string): boolean {
     .includes(needle);
 }
 
-export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: () => void; initialSource?: string | null }) {
+type View = "grid" | "list";
+type Sort = "recommended" | "name" | "source";
+const VIEW_KEY = "bb-hooks:marketplace-view";
+
+function readView(): View {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid";
+  } catch {
+    return "grid";
+  }
+}
+
+function toneFor(entry: TemplateEntry): "neutral" | "gate" | "accent" {
+  if (entry.template.kind === "gate") return "gate";
+  return categoryOf(entry.template).id === "notify" ? "accent" : "neutral";
+}
+
+export function MarketplaceTab({ onInstalled, initialSource, onManageSources }: { onInstalled: () => void; initialSource?: string | null; onManageSources?: () => void }) {
   const { data } = useOverview();
   const installed = useInstalledCounts();
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -54,10 +71,20 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
   const [source, setSource] = useState<string>(initialSource ?? "all");
   const [category, setCategory] = useState<string>("all");
   const [kind, setKind] = useState<"all" | "observe" | "gate">("all");
+  const [sort, setSort] = useState<Sort>("recommended");
+  const [view, setView] = useState<View>(() => readView());
   const [open, setOpen] = useState<{ entry: TemplateEntry; mode: "about" | "install" } | null>(null);
   useEffect(() => {
     if (initialSource) setSource(initialSource);
   }, [initialSource]);
+  const changeView = (next: View) => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      /* private mode */
+    }
+  };
 
   const templates = data?.templates ?? [];
   const sources = useMemo(() => ["bundled", ...[...new Set(templates.map((entry) => entry.source))].filter((name) => name !== "bundled").sort()], [templates]);
@@ -70,18 +97,42 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
     return counts;
   }, [templates]);
   const filtering = query.trim() !== "" || source !== "all" || category !== "all" || kind !== "all";
-  const visible = useMemo(
-    () =>
-      templates.filter(
-        (entry) =>
-          (source === "all" || entry.source === source) &&
-          (kind === "all" || entry.template.kind === kind) &&
-          (category === "all" || categoryOf(entry.template).id === category) &&
-          matchesQuery(entry, query),
-      ),
-    [templates, source, kind, category, query],
-  );
+  const visible = useMemo(() => {
+    const list = templates.filter(
+      (entry) =>
+        (source === "all" || entry.source === source) &&
+        (kind === "all" || entry.template.kind === kind) &&
+        (category === "all" || categoryOf(entry.template).id === category) &&
+        matchesQuery(entry, query),
+    );
+    const byName = (a: TemplateEntry, b: TemplateEntry) => a.template.name.localeCompare(b.template.name);
+    if (sort === "name") return [...list].sort(byName);
+    if (sort === "source") return [...list].sort((a, b) => (a.source === b.source ? byName(a, b) : a.source === "bundled" ? -1 : b.source === "bundled" ? 1 : a.source.localeCompare(b.source)));
+    // Recommended: featured first, then the catalog order, which authors curate.
+    return [...list].sort((a, b) => {
+      const fa = a.source === "bundled" ? FEATURED.indexOf(a.template.id) : -1;
+      const fb = b.source === "bundled" ? FEATURED.indexOf(b.template.id) : -1;
+      if (fa !== -1 || fb !== -1) return (fa === -1 ? 99 : fa) - (fb === -1 ? 99 : fb);
+      return 0;
+    });
+  }, [templates, source, kind, category, query, sort]);
+  const grouped = useMemo(() => {
+    if (filtering || sort !== "recommended") return null;
+    return CATEGORIES.map((item) => ({ category: item, entries: visible.filter((entry) => categoryOf(entry.template).id === item.id) })).filter((group) => group.entries.length > 0);
+  }, [visible, filtering, sort]);
   const featured = useMemo(() => FEATURED.map((id) => templates.find((entry) => entry.source === "bundled" && entry.template.id === id)).filter((entry): entry is TemplateEntry => entry !== undefined), [templates]);
+  const sourceRecord = useMemo(() => (source === "all" || source === "bundled" ? null : (data?.catalogs ?? []).find((record) => record.catalog?.name === source) ?? null), [data, source]);
+
+  const renderEntries = (entries: TemplateEntry[]) =>
+    view === "list" ? (
+      <TemplateList entries={entries} installed={installed} onOpen={(entry, mode) => setOpen({ entry, mode })} />
+    ) : (
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {entries.map((entry) => (
+          <TemplateCard key={entry.ref} entry={entry} installedCount={installed.get(templateKey(entry)) ?? 0} onOpen={(mode) => setOpen({ entry, mode })} />
+        ))}
+      </div>
+    );
 
   return (
     <div className="space-y-5">
@@ -96,7 +147,7 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
           ) : null}
         </div>
         <Select value={source} onValueChange={setSource}>
-          <SelectTrigger className="h-9 md:w-44" aria-label="Source">
+          <SelectTrigger className="h-9 md:w-40" aria-label="Source">
             <SelectValue placeholder="All sources" />
           </SelectTrigger>
           <SelectContent>
@@ -118,6 +169,24 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
             <SelectItem value="gate">Gates messages</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={sort} onValueChange={(value) => setSort(value as Sort)}>
+          <SelectTrigger className="h-9 md:w-40" aria-label="Sort">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="recommended">By category</SelectItem>
+            <SelectItem value="name">Name A–Z</SelectItem>
+            <SelectItem value="source">By source</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex shrink-0 rounded-md border border-border p-0.5" role="group" aria-label="Layout">
+          <Button type="button" size="icon" variant="ghost" className="size-8" aria-label="Grid" aria-pressed={view === "grid"} onClick={() => changeView("grid")}>
+            <Icon name="GridView" className="size-4" />
+          </Button>
+          <Button type="button" size="icon" variant="ghost" className="size-8" aria-label="List" aria-pressed={view === "list"} onClick={() => changeView("list")}>
+            <Icon name="ListView" className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -131,11 +200,40 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
         ))}
       </div>
 
+      {sourceRecord ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+          <IconBox name={sourceRecord.url.includes("github") ? "Github" : "Globe"} tone="accent" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5 text-sm">
+              <span className="font-semibold">{sourceRecord.catalog?.name}</span>
+              {sourceRecord.catalog?.version ? <span className="text-xs text-muted-foreground">v{sourceRecord.catalog.version}</span> : null}
+              {sourceRecord.catalog?.author ? <span className="text-xs text-muted-foreground">by {sourceRecord.catalog.author}</span> : null}
+              <span className="text-xs text-muted-foreground">· {sourceRecord.catalog?.templates.length ?? 0} templates</span>
+            </div>
+            <p className="truncate text-xs text-muted-foreground">{sourceRecord.catalog?.description ?? sourceRecord.url}</p>
+          </div>
+          {sourceRecord.catalog?.homepage ? (
+            <a href={sourceRecord.catalog.homepage} target="_blank" rel="noopener noreferrer" className="text-xs underline underline-offset-4">
+              homepage
+            </a>
+          ) : null}
+          {onManageSources ? (
+            <Button type="button" size="sm" variant="ghost" onClick={onManageSources}>
+              Manage sources
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       {data === null ? (
-        <EmptyState icon="Loading" title="Loading the marketplace…" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-busy>
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="h-40 animate-pulse rounded-lg border border-border bg-muted/40" />
+          ))}
+        </div>
       ) : (
         <>
-          {!filtering && featured.length > 0 ? (
+          {!filtering && featured.length > 0 && sort === "recommended" ? (
             <section className="space-y-2">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start here</h2>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -144,9 +242,9 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
                     key={entry.ref}
                     type="button"
                     onClick={() => setOpen({ entry, mode: "install" })}
-                    className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:bg-state-hover"
+                    className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 text-left transition-colors hover:border-foreground/30 hover:bg-state-hover"
                   >
-                    <IconBox name={iconForTemplate(entry.template)} tone={entry.template.kind === "gate" ? "gate" : "accent"} />
+                    <IconBox name={iconForTemplate(entry.template)} tone={toneFor(entry)} />
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-medium text-foreground">{entry.template.name}</span>
                       <span className="block truncate text-xs text-muted-foreground">{entry.template.summary}</span>
@@ -157,38 +255,50 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
             </section>
           ) : null}
 
-          <section className="space-y-2">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {filtering ? `${visible.length} of ${templates.length} hooks` : `All ${templates.length} hooks`}
-              </h2>
-              {filtering ? (
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground underline-offset-4 hover:underline"
-                  onClick={() => {
-                    setQuery("");
-                    setSource("all");
-                    setCategory("all");
-                    setKind("all");
-                  }}
-                >
-                  Clear filters
-                </button>
-              ) : null}
-            </div>
-            {visible.length === 0 ? (
-              <EmptyState icon="Search" title="Nothing matches">
-                {data.catalogs.length === 0 ? "Add a catalog under Sources to get more hooks, or write your own under Installed." : "Try another search, category or source."}
-              </EmptyState>
-            ) : (
-              <div className="grid gap-3 md:grid-cols-2">
-                {visible.map((entry) => (
-                  <TemplateCard key={entry.ref} entry={entry} installedCount={installed.get(templateKey(entry)) ?? 0} onOpen={(mode) => setOpen({ entry, mode })} />
-                ))}
+          {visible.length === 0 ? (
+            <EmptyState icon="Search" title="Nothing matches">
+              {data.catalogs.length === 0 ? "Add a catalog under Sources to get more hooks, or write your own under Installed." : "Try another search, category or source."}
+            </EmptyState>
+          ) : grouped ? (
+            grouped.map((group) => (
+              <section key={group.category.id} className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Icon name={group.category.icon} className="size-3.5" />
+                    {group.category.label}
+                    <span className="font-normal normal-case">· {group.entries.length}</span>
+                  </h2>
+                  <button type="button" className="text-xs text-muted-foreground underline-offset-4 hover:underline" onClick={() => setCategory(group.category.id)}>
+                    Only {group.category.label.toLowerCase()}
+                  </button>
+                </div>
+                {renderEntries(group.entries)}
+              </section>
+            ))
+          ) : (
+            <section className="space-y-2">
+              <div className="flex items-baseline justify-between">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {filtering ? `${visible.length} of ${templates.length} hooks` : `All ${templates.length} hooks`}
+                </h2>
+                {filtering ? (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                    onClick={() => {
+                      setQuery("");
+                      setSource("all");
+                      setCategory("all");
+                      setKind("all");
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
               </div>
-            )}
-          </section>
+              {renderEntries(visible)}
+            </section>
+          )}
         </>
       )}
 
@@ -209,52 +319,91 @@ export function MarketplaceTab({ onInstalled, initialSource }: { onInstalled: ()
 
 function TemplateCard({ entry, installedCount, onOpen }: { entry: TemplateEntry; installedCount: number; onOpen: (mode: "about" | "install") => void }) {
   const { template } = entry;
-  const gate = template.kind === "gate";
+  const events = template.events.slice(0, 3);
+  const more = template.events.length - events.length;
   return (
-    <article className="group flex flex-col rounded-lg border border-border bg-card transition-colors hover:border-foreground/30">
-      <button type="button" onClick={() => onOpen("about")} className="flex flex-1 items-start gap-3 px-4 pt-4 text-left">
-        <IconBox name={iconForTemplate(template)} tone={gate ? "gate" : "neutral"} />
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5">
-            <span className="text-sm font-semibold text-foreground">{template.name}</span>
-            <KindBadge kind={template.kind} />
-            <SourceBadge source={entry.source} />
-          </span>
-          <span className="mt-1 block text-xs leading-5 text-muted-foreground">{template.summary}</span>
-          {template.author || template.version ? (
-            <span className="mt-1 block text-[11px] text-muted-foreground">
-              {template.author ? `by ${template.author}` : ""}
-              {template.author && template.version ? " · " : ""}
-              {template.version ? `v${template.version}` : ""}
+    <article className="group relative flex h-full flex-col rounded-lg border border-border bg-card transition-colors hover:border-foreground/30">
+      <button type="button" onClick={() => onOpen("about")} className="flex flex-1 flex-col gap-3 px-4 pb-3 pt-4 text-left">
+        <span className="flex items-start gap-3">
+          <IconBox name={iconForTemplate(template)} tone={toneFor(entry)} className="size-10" />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5 pr-10">
+              <span className="truncate text-sm font-semibold text-foreground">{template.name}</span>
+              {template.kind === "gate" ? <KindBadge kind="gate" /> : null}
             </span>
-          ) : null}
-          <span className="mt-2 flex flex-wrap items-center gap-1">
-            {template.events.map((event) => (
-              <EventPill key={event} event={event} />
-            ))}
+            <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">{template.summary}</span>
           </span>
         </span>
-      </button>
-      <div className="flex items-center justify-between gap-2 px-4 pb-3 pt-3">
-        <div className="flex min-w-0 flex-wrap gap-1">
-          {(template.tags ?? []).slice(0, 4).map((tag) => (
-            <Tag key={tag}>{tag}</Tag>
+        <span className="flex flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap">
+          {events.map((event) => (
+            <EventPill key={event} event={event} />
           ))}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {installedCount > 0 ? (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Icon name="CircleCheck" className="size-3.5" />
-              {installedCount} installed
-            </span>
-          ) : null}
-          <Button type="button" size="sm" onClick={() => onOpen("install")}>
+          {more > 0 ? <span className="text-[11px] text-muted-foreground">+{more}</span> : null}
+        </span>
+        {installedCount > 0 ? (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary" title={`${installedCount} installed`}>
+            <Icon name="Check" className="size-3" />
+            {installedCount}
+          </span>
+        ) : null}
+      </button>
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-border px-4 py-2">
+        <span className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-muted-foreground">
+          <SourceBadge source={entry.source} />
+          {template.author ? <span className="truncate">by {template.author}</span> : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-1">
+          <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onOpen("about")}>
+            Details
+          </Button>
+          <Button type="button" size="sm" className="h-7 px-2.5 text-xs" onClick={() => onOpen("install")}>
             <Icon name="Plus" className="size-3.5" />
             Install
           </Button>
-        </div>
+        </span>
       </div>
     </article>
+  );
+}
+
+function TemplateList({ entries, installed, onOpen }: { entries: TemplateEntry[]; installed: Map<string, number>; onOpen: (entry: TemplateEntry, mode: "about" | "install") => void }) {
+  return (
+    <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+      {entries.map((entry) => {
+        const { template } = entry;
+        const count = installed.get(templateKey(entry)) ?? 0;
+        return (
+          <li key={entry.ref} className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-state-hover">
+            <IconBox name={iconForTemplate(template)} tone={toneFor(entry)} className="size-8" />
+            <button type="button" onClick={() => onOpen(entry, "about")} className="min-w-0 flex-1 text-left">
+              <span className="flex items-center gap-1.5">
+                <span className="truncate font-medium text-foreground">{template.name}</span>
+                {template.kind === "gate" ? <KindBadge kind="gate" /> : null}
+                <SourceBadge source={entry.source} />
+                {count > 0 ? (
+                  <span className="inline-flex items-center gap-0.5 text-[11px] text-primary">
+                    <Icon name="Check" className="size-3" />
+                    {count}
+                  </span>
+                ) : null}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">{template.summary}</span>
+            </button>
+            <div className="hidden shrink-0 items-center gap-1 lg:flex">
+              {template.events.slice(0, 2).map((event) => (
+                <EventPill key={event} event={event} />
+              ))}
+              {template.events.length > 2 ? <span className="text-[11px] text-muted-foreground">+{template.events.length - 2}</span> : null}
+            </div>
+            <span className="hidden w-24 shrink-0 truncate text-[11px] text-muted-foreground md:block">{template.author ? `by ${template.author}` : ""}</span>
+            <Button type="button" size="sm" className="h-7 px-2.5 text-xs" onClick={() => onOpen(entry, "install")}>
+              <Icon name="Plus" className="size-3.5" />
+              Install
+            </Button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

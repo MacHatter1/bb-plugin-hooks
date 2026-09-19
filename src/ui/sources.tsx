@@ -104,6 +104,16 @@ export function SourcesTab({ onBrowse }: { onBrowse: (source: string) => void })
                       </p>
                     </div>
                   </div>
+                  {record.catalog && record.catalog.templates.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {record.catalog.templates.slice(0, 6).map((template) => (
+                        <span key={template.id} className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                          {template.name}
+                        </span>
+                      ))}
+                      {record.catalog.templates.length > 6 ? <span className="px-1 text-[11px] text-muted-foreground">+{record.catalog.templates.length - 6} more</span> : null}
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs text-muted-foreground">
                       {count} template{count === 1 ? "" : "s"}

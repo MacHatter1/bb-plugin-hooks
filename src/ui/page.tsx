@@ -75,7 +75,7 @@ function PageBody({ subPath }: { subPath: string }) {
             ))}
           </TabsList>
         </Tabs>
-        {tab === "marketplace" ? <MarketplaceTab onInstalled={() => go("installed")} initialSource={marketSource} /> : null}
+        {tab === "marketplace" ? <MarketplaceTab onInstalled={() => go("installed")} initialSource={marketSource} onManageSources={() => go("sources")} /> : null}
         {tab === "installed" ? <InstalledTab onBrowse={() => go("marketplace")} onNewHook={newHook} /> : null}
         {tab === "sources" ? (
           <SourcesTab
