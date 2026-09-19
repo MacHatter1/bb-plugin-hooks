@@ -286,6 +286,34 @@ bb hooks history [--limit n] [--hook id] | bb hooks history clear
   and treats overruns as `onError`.
 - `experimental_thread.events` fires up to once per second per running thread.
 
+## Showcase
+
+**Marketplace** — search, category chips, a start-here row, and a card per
+template with author, events and tags. Install opens a dialog with About,
+Install and What it runs.
+
+![Marketplace tab](assets/screenshots/marketplace.png)
+
+![Template dialog with the install form](assets/screenshots/template-dialog.png)
+
+**Installed** — gates and reacting hooks with switches, last-run status,
+expandable details, Test, Edit, and a live run log. New hook opens a thread
+where you describe the hook to an agent; the terminal button opens the form
+editor for writing one by hand.
+
+![Installed tab with an expanded hook](assets/screenshots/installed.png)
+
+![Hook editor](assets/screenshots/editor.png)
+
+**Sources, Secrets, Reference** — catalogs as cards, encrypted secrets with
+usage and rotation, and the event and payload reference.
+
+| Sources | Secrets |
+| --- | --- |
+| ![Sources tab](assets/screenshots/sources.png) | ![Secrets tab](assets/screenshots/secrets.png) |
+
+![Reference tab](assets/screenshots/reference.png)
+
 ## Install
 
 From a clone (path install, loads `server.ts` directly and follows your edits
