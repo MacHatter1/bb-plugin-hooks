@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="BB Hooks">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b0c14"/>
+      <stop offset="1" stop-color="#171a2b"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#9333ea"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.25" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#6d5cff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#6d5cff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#halo)"/>
+  <g transform="translate(96 152) scale(0.66)">
+    <rect width="512" height="512" rx="112" fill="url(#mark)"/>
+    <circle cx="300" cy="118" r="34" fill="none" stroke="#ffffff" stroke-width="26"/>
+    <path d="M300 152 V300 a70 70 0 0 1 -140 0 V262" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M160 262 l-38 40 M160 262 l38 40" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M392 322 l-34 62 h40 l-30 58 l74 -84 h-40 l32 -36 z" fill="#fde047"/>
+  </g>
+  <g font-family="-apple-system, 'SF Pro Display', 'Segoe UI', Inter, Helvetica, Arial, sans-serif" fill="#ffffff">
+    <text x="478" y="246" font-size="64" font-weight="700" letter-spacing="-1">BB Hooks</text>
+    <text x="480" y="302" font-size="26" fill="#c7c9d9">Custom hooks for BB agents: react to thread events, gate</text>
+    <text x="480" y="340" font-size="26" fill="#c7c9d9">messages, keep secrets encrypted, install from a marketplace.</text>
+    <rect x="478" y="392" width="742" height="60" rx="14" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.16"/>
+    <text x="500" y="428" font-family="'SF Mono', Menlo, Consolas, monospace" font-size="16" fill="#e6e7f0">bb plugin install git:https://github.com/MacHatter1/bb-plugin-hooks.git</text>
+  </g>
+</svg>

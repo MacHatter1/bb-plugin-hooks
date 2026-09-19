@@ -1,8 +1,30 @@
-# bb-plugin-hooks
+<p align="center">
+  <img src="assets/logo.svg" width="128" height="128" alt="BB Hooks logo">
+</p>
 
-Custom hooks for [BB](https://github.com/get-bb/bb): run a shell command or
-call a webhook when a thread changes state, and gate messages before they
-reach the agent.
+<h1 align="center">BB Hooks</h1>
+
+<p align="center">
+  Custom hooks for <a href="https://github.com/get-bb/bb">BB</a> agents: run a shell command or call a webhook when a thread changes state,<br>
+  gate messages before they reach the agent, keep credentials encrypted, and install ready-made hooks from a marketplace.
+</p>
+
+<p align="center">
+  <img alt="version: 0.1.0" src="https://img.shields.io/badge/version-0.1.0-6d5cff?style=flat-square">
+  <img alt="bb: 0.43+" src="https://img.shields.io/badge/bb-0.43%2B-3b82f6?style=flat-square">
+  <img alt="templates: 12 bundled" src="https://img.shields.io/badge/templates-12%20bundled-10b981?style=flat-square">
+  <img alt="tests: 59" src="https://img.shields.io/badge/tests-59-ef4444?style=flat-square">
+  <img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="https://github.com/MacHatter1/bb-hooks-marketplace">Community catalog</a> ·
+  <a href="#the-hooks-page">The Hooks page</a> ·
+  <a href="#premade-hooks">Premade hooks</a> ·
+  <a href="#secrets">Secrets</a> ·
+  <a href="#marketplace">Marketplace</a> ·
+  <a href="#cli">CLI</a>
+</p>
 
 ```
 bb hooks add notify --event thread.idle \
@@ -260,6 +282,14 @@ bb plugin install git:https://github.com/MacHatter1/bb-plugin-hooks.git
 
 The repository is private for now, so a git install needs git credentials for
 GitHub on the machine running BB (`gh auth setup-git` configures them).
+
+## Branding assets
+
+`assets/logo.svg` is the plugin's logo (also shown by BB on the plugin page)
+and `assets/social-preview.png` is the 1280×640 image for the repository's
+social preview. They are rendered from SVG with the `npm run assets` script in
+the [marketplace repository](https://github.com/MacHatter1/bb-hooks-marketplace),
+which shares the same mark.
 
 ## Develop
 
