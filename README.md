@@ -53,8 +53,9 @@ size; the title bar holds the master switch (Running / Paused) and a refresh.
   Edit, Remove, and expandable details. **New hook** opens a new thread
   seeded with the bundled `create-hook` skill: you describe what should
   happen and when, and the agent picks a template or writes the hook, tests
-  it with `bb hooks test`, and hands it over. A "write by hand" button opens
-  the form editor instead, which Edit also uses. The run log below is live,
+  it with `bb hooks test`, and hands it over. The same "Create a hook" entry
+  sits in every composer's **+** menu, so you can start from any thread. A
+  "write by hand" button opens the form editor instead, which Edit also uses. The run log below is live,
   filterable by hook and failures, and opens the full output per row.
 - **Sources** — catalogs as cards with template counts, status and homepage,
   add by `owner/repo`, URL or alias, refresh, browse, remove.
