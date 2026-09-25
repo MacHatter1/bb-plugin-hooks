@@ -11,7 +11,7 @@ Control message dispatch and inspect hook runs from one place.
 
 ![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue)
 ![bb ≥ 0.43](https://img.shields.io/badge/bb-%E2%89%A5%200.43-4f46e5)
-![Plugin SDK ≥ 0.4.87](https://img.shields.io/badge/plugin%20SDK-%E2%89%A5%200.4.87-9333ea)
+![Plugin SDK ≥ 0.5.9](https://img.shields.io/badge/plugin%20SDK-%E2%89%A5%200.5.9-9333ea)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
 
 [The problem](#the-problem) · [Features](#features) · [Install](#install) · [Where to find it](#where-to-find-it) · [How it works](#how-it-works) · [Privacy and control](#privacy-and-control) · [CLI](#cli) · [Settings](#settings) · [Development](#development) · [Licence](#licence)
@@ -127,7 +127,7 @@ bb plugin install path:$PWD --yes
 
 **Requirements**
 
-- bb **0.43+** (Plugin SDK **0.4.87+**)
+- bb **0.43+** (runtime SDK **0.4.87+**; development pin **0.5.9**)
 - Node.js and npm for a local build
 
 ## Where to find it

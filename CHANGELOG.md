@@ -10,6 +10,10 @@ All notable changes to Hooks are documented here. The format follows
 
 - Group marketplace listings by category, sort results, switch between card and list views, and browse catalog banners.
 
+### Changed
+
+- Sync the Plugin SDK declarations and preserve dispatch payload compatibility across SDK context versions.
+
 ## 0.3.0 - 2026-09-19
 
 ### Added

@@ -140,6 +140,30 @@ export function prepareDispatch(ctx: MessageDispatchHookContext): PreparedEvent 
     const typed = block as { type: string; text?: string };
     return typed.type === "text" ? { type: "text", text: typed.text ?? "" } : { type: typed.type };
   });
+  type LegacyQueuedMessage = { id: string; waitingOn: unknown; sendAt: number | null };
+  const legacyContext = ctx as MessageDispatchHookContext & {
+    queuedMessage?: LegacyQueuedMessage | null;
+    startedOnBehalfOf?: { initiator: "agent" | "system"; senderThreadId: string } | null;
+  };
+  const queuedMessages = Array.isArray(ctx.queuedMessages)
+    ? ctx.queuedMessages.map(({ id, waitingOn, sendAt, initiator, senderThreadId, origin, originPluginId }) => ({
+        id,
+        waitingOn,
+        sendAt,
+        initiator,
+        senderThreadId,
+        origin,
+        originPluginId,
+      }))
+    : legacyContext.queuedMessage == null
+      ? []
+      : [legacyContext.queuedMessage];
+  const initiator = ctx.initiator ?? legacyContext.startedOnBehalfOf?.initiator ?? "user";
+  const senderThreadId = ctx.senderThreadId ?? legacyContext.startedOnBehalfOf?.senderThreadId ?? null;
+  const startedOnBehalfOf =
+    (initiator === "agent" || initiator === "system") && typeof senderThreadId === "string"
+      ? { initiator, senderThreadId }
+      : null;
   const payload: Record<string, unknown> = {
     thread: ctx.thread,
     project: ctx.project,
@@ -150,10 +174,14 @@ export function prepareDispatch(ctx: MessageDispatchHookContext): PreparedEvent 
     input: { text: ctx.input.text, blocks },
     requestedExecution: ctx.requestedExecution,
     executionSources: ctx.executionSources,
-    queuedMessage: ctx.queuedMessage === null ? null : { id: ctx.queuedMessage.id, waitingOn: ctx.queuedMessage.waitingOn, sendAt: ctx.queuedMessage.sendAt },
+    initiator,
+    senderThreadId,
+    queuedMessages,
+    queuedMessage: queuedMessages[0] ?? null,
+    experimentalSubmission: ctx.experimental_submission ?? null,
     origin: ctx.origin,
     originPluginId: ctx.originPluginId,
-    startedOnBehalfOf: ctx.startedOnBehalfOf,
+    startedOnBehalfOf,
     parentThreadId: ctx.parentThreadId,
   };
   const env = baseEnv("message.dispatch", thread, ctx.thread.id);
@@ -230,7 +258,11 @@ export function prepareSample(event: HookEvent, thread: ThreadFacts | null): Pre
           input: { text: "Sample message.", blocks: [{ type: "text", text: "Sample message." }] },
           requestedExecution: { providerId: sampleThread.providerId, model: null, reasoningLevel: null, serviceTier: null, permissionMode: null },
           executionSources: { providerId: null, model: null, reasoningLevel: null, serviceTier: null, permissionMode: null },
+          initiator: "user",
+          senderThreadId: null,
+          queuedMessages: [],
           queuedMessage: null,
+          experimentalSubmission: null,
           origin: null,
           originPluginId: null,
           startedOnBehalfOf: null,

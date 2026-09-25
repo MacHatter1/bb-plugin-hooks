@@ -50,7 +50,10 @@ export function ReferenceTab() {
   "entry": { … }                // message.queued / dispatched / cancelled
   "requestId", "errorInfo", "rateLimits", "attemptNumber"   // turn.failed
   "project", "environment", "host", "attempt", "input": { "text" },
-  "requestedExecution", "queuedMessage"                      // message.dispatch
+  "requestedExecution", "executionSources", "initiator", "senderThreadId",
+  "queuedMessages", "queuedMessage"   // first row, retained for compatibility
+  "experimentalSubmission", "origin", "originPluginId", "startedOnBehalfOf",
+  "parentThreadId"                                          // message.dispatch
 }`}</Code>
         </div>
         <div className="space-y-2">
