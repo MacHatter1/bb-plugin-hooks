@@ -43,7 +43,7 @@ A template from a catalog needs `--yes`; before adding it, show the user what
   JSON on stdin; `BB_THREAD_TITLE`, `BB_THREAD_ID`, `BB_PROJECT_ID`,
   `BB_HOOK_EVENT`, `BB_SERVER_URL` and `BB_CLI` (the bb binary) are in the
   environment. Use `{{secret:name}}` for credentials.
-- Webhooks: add `--header 'name: value'` and let the plugin send the event
+- Webhooks: add `--header 'name=value'` and let the plugin send the event
   JSON, or shape it with a body template via `bb hooks edit <id> --url …`
   (bodies use `{{thread.title}}`, `{{lastAssistantText|500}}`).
 - Gate hooks (`message.dispatch`): exit 0 proceeds, 2 rejects with stderr as

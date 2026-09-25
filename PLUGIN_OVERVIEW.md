@@ -1,46 +1,19 @@
-Make BB call your code when threads change state. Bind a shell command or a
-webhook URL to any thread lifecycle event, filter it by project, provider or
-title, and manage it all from `bb hooks` or the settings page.
+Hooks runs your shell commands or sends webhooks when BB thread events happen. Add a gate on `message.dispatch` to let messages through, reject them with a reason, or wait before they reach the provider.
 
-## What you get
+## What you can do
 
-- **Premade hooks** you configure with one command: desktop notifications,
-  spoken alerts, phone push via ntfy, Slack, Discord and Telegram messages,
-  log to file, automatic follow-up and review threads, a pattern blocker, and
-  office hours. `bb hooks use slack --set webhookUrl=…` and you are done.
-- **A marketplace**: the community catalog at
-  https://github.com/MacHatter1/bb-hooks-marketplace is subscribed out of the
-  box; add more catalogs from GitHub repos or URLs, search across them,
-  install with one command, and publish your own with
-  `bb hooks marketplace init` and `bb hooks export`.
-- **Encrypted secrets**: webhook URLs and tokens are stored encrypted and
-  referenced as `{{secret:name}}`, never written into a hook.
-- **Custom hooks** on every BB lifecycle event: thread created, active,
-  idle, failed, archived, unarchived, deleted; interaction pending; messages
-  queued, dispatched or cancelled; turn failed.
-- **Gate hooks** on `message.dispatch`: your script decides whether a
-  message proceeds, waits, or is rejected, with the reason shown to the user.
-- **Shell or webhook targets**: commands get the event as JSON on stdin plus
-  `BB_*` environment variables; webhooks get a signed JSON POST.
-- **A `bb hooks` CLI** for agents and terminals: add, edit, enable, disable,
-  test with a sample or real thread, and read run history.
-- **Editable in settings**: the same definitions live in a JSON setting, so
-  you can paste or version them.
+- **Start from a template:** install desktop notifications, Slack, Discord, Telegram, ntfy, follow-up threads, code reviews, message gates and more.
+- **Browse catalogs:** the built-in `starter` examples and community catalog are available by default. Add other GitHub repositories or HTTPS catalog URLs, then search and install their templates.
+- **Protect credentials:** secrets are encrypted in the plugin database and referenced from hooks without storing their values in the hook definition.
+- **Choose the match:** react to thread lifecycle events, filter by project, provider, title or text, or check each outgoing message before dispatch.
+- **Use the interface you prefer:** manage and test hooks from the Hooks page, `bb hooks`, or an agent using the bundled skills.
 
 ## How it works
 
-Hook definitions are stored in the plugin's settings on the BB server. When
-an event fires, matching hooks run concurrently with a per-hook timeout and
-the outcome is recorded in a bounded run history. Gate hooks run in their own
-lane with an 8 second budget so a slow script never blocks BB.
+Hooks live in the plugin settings. Commands run on the machine hosting the BB server and receive event JSON on stdin; webhooks get a JSON POST, with an optional body template. Observe hooks run after events. Gate hooks run before dispatch and can proceed, reject or wait. Gates have an 8-second time limit and proceed on errors by default.
 
-Commands run on the machine hosting the BB server. Nothing leaves your
-machine unless you point a hook at a URL.
+The server fetches configured marketplace catalogs periodically. URL hooks send event JSON to the endpoint you configure; shell commands run with the server user's access and can make their own network requests. Catalog templates require explicit confirmation before installation.
 
 ## For agents
 
-Two bundled skills: one teaches agents the events, the payload shape, and the
-`bb hooks` workflow; the other, `create-hook`, turns "tell me when a thread
-needs me" into an installed, tested hook. The New hook button on the Hooks
-page opens a thread with that skill, so people describe hooks instead of
-filling in forms.
+The `hooks` skill documents events, payloads and the `bb hooks` CLI. The `create-hook` skill turns a request into a configured and tested hook; the New hook action opens a thread with that skill.

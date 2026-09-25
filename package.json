@@ -2,7 +2,7 @@
   "name": "bb-plugin-hooks",
   "version": "0.3.0",
   "type": "module",
-  "description": "User-defined hooks: run shell commands or call webhooks when BB threads change state, and gate message dispatch.",
+  "description": "Run shell commands or webhooks on thread events, and gate message dispatch with custom policy.",
   "license": "MIT",
   "engines": {
     "bb": ">=0.43",

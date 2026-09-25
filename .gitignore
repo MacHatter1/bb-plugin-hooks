@@ -1,3 +1,28 @@
+# Build output and dependencies
 dist/
 node_modules/
+coverage/
+*.tsbuildinfo
+
+# bb and agent workspace state (chat copies, notes, local settings)
+.bb/
 .claude/
+.codex/
+.cursor/
+CLAUDE.local.md
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
