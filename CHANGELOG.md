@@ -8,11 +8,31 @@ All notable changes to Hooks are documented here. The format follows
 
 ### Added
 
+- Browse templates by category, with the author and a performance and security score out of 100 (with a letter grade) taken from what each template runs.
+
+### Changed
+
+- The plugin no longer ships its own hooks. Templates come from the marketplace catalog, which a new install subscribes to.
+- The run log is paged, 25 runs at a time, including when filtered by hook or failure.
+
+## 0.4.0 - 2026-09-28
+
+### Added
+
 - Group marketplace listings by category, sort results, switch between card and list views, and browse catalog banners.
+- Pass `BB_CLI` to command hooks when the server can resolve the `bb` binary.
 
 ### Changed
 
 - Sync the Plugin SDK declarations and preserve dispatch payload compatibility across SDK context versions.
+
+### Fixed
+
+- A gate hook that exits with an unexpected code now names that code in the reason.
+- Adding or editing a hook leaves an unreadable hooks setting unchanged, and overlapping edits no longer drop a hook.
+- Webhook requests do not follow redirects, so a payload is not sent on to another host.
+- Run history and test output redact stored secret values.
+- A gate hook skipped because the dispatch budget ran out is written to the run history.
 
 ## 0.3.0 - 2026-09-19
 

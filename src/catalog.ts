@@ -1,7 +1,7 @@
 // The hooks marketplace: remote catalogs of templates. A catalog is a JSON
 // document (`hooks-catalog.json`) at an https URL or in a GitHub repository.
-// Fetched catalogs are cached in the plugin database; a registry merges them
-// with the bundled templates and resolves `catalog/template` references.
+// Fetched catalogs are cached in the plugin database. The registry lists them
+// and resolves `catalog/template` references. The plugin ships no templates.
 import type Database from "better-sqlite3";
 import { z } from "zod";
 import { formatIssues } from "./definitions.js";

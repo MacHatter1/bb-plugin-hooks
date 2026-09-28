@@ -206,7 +206,8 @@ export function createRunner(options: RunnerOptions = {}): Runner {
       headers["x-bb-hooks-signature"] = `sha256=${digest}`;
     }
     try {
-      const response = await fetchImpl(url, { method: "POST", headers, body, signal: controller.signal });
+      // A redirect would send the payload, and any secret in it, to a different host.
+      const response = await fetchImpl(url, { method: "POST", headers, body, signal: controller.signal, redirect: "error" });
       const text = cap(await response.text());
       return {
         status: response.ok ? "ok" : "error",
@@ -255,9 +256,11 @@ export function createRunner(options: RunnerOptions = {}): Runner {
       }
       const release = await semaphore.acquire();
       try {
-        if (request.hook.command !== undefined) return await runCommand(request, request.hook.command, secretEnv);
-        if (request.hook.url !== undefined) return await runUrl(request, request.hook.url, secretValues);
-        return { status: "error", exitCode: null, httpStatus: null, stdout: "", stderr: "", durationMs: 0, error: "hook has neither command nor url" };
+        let outcome: RunOutcome;
+        if (request.hook.command !== undefined) outcome = await runCommand(request, request.hook.command, secretEnv);
+        else if (request.hook.url !== undefined) outcome = await runUrl(request, request.hook.url, secretValues);
+        else outcome = { status: "error", exitCode: null, httpStatus: null, stdout: "", stderr: "", durationMs: 0, error: "hook has neither command nor url" };
+        return redactOutcome(outcome, Object.values(secretValues));
       } finally {
         release();
       }
@@ -305,21 +308,53 @@ function firstText(...candidates: string[]): string | null {
   return null;
 }
 
+/** Values shorter than this stay visible. Replacing "ok" or "true" would chew ordinary output. */
+const REDACT_MIN_LENGTH = 8;
+
+function redactSecrets(text: string, values: readonly string[]): string {
+  const secrets = values.filter((value) => value.length >= REDACT_MIN_LENGTH).sort((a, b) => b.length - a.length);
+  let out = text;
+  for (const secret of secrets) {
+    if (out.includes(secret)) out = out.split(secret).join("••••");
+  }
+  return out;
+}
+
+function redactOutcome(outcome: RunOutcome, values: readonly string[]): RunOutcome {
+  if (values.length === 0) return outcome;
+  return {
+    ...outcome,
+    stdout: redactSecrets(outcome.stdout, values),
+    stderr: redactSecrets(outcome.stderr, values),
+    error: outcome.error === null ? null : redactSecrets(outcome.error, values),
+  };
+}
+
+function failureDetail(outcome: RunOutcome): string {
+  if (outcome.error !== null && outcome.error !== "") return outcome.error;
+  if (outcome.exitCode !== null) {
+    const text = firstText(outcome.stderr);
+    return text === null ? `exited ${outcome.exitCode}` : `exited ${outcome.exitCode}: ${text}`;
+  }
+  return "unknown error";
+}
+
 /**
  * Turn a gate hook's outcome into the decision core acts on.
  *
  * A JSON object on the last stdout line wins ({"action":"reject","message":…}).
  * Otherwise exit 0 proceeds, 2 rejects and 3 waits, with stderr (then stdout)
- * as the message. Any other failure applies the hook's onError (default proceed).
+ * as the message. Any other exit names its code and applies onError (default proceed).
  */
 export function decide(hook: HookDefinition, outcome: RunOutcome): { decision: Decision; fromError: boolean } {
   const label = `hook "${hook.id}"`;
   const fallbackDecision = (): Decision => {
+    const detail = `${label} failed: ${failureDetail(outcome)}`;
     switch (hook.onError ?? "proceed") {
       case "reject":
-        return { action: "reject", message: `${label} failed: ${outcome.error ?? "unknown error"}` };
+        return { action: "reject", message: detail };
       case "wait":
-        return { action: "wait", reason: `${label} failed: ${outcome.error ?? "unknown error"}`, sendAt: null };
+        return { action: "wait", reason: detail, sendAt: null };
       default:
         return { action: "proceed" };
     }

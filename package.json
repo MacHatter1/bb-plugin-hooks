@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-hooks",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "description": "Run shell commands or webhooks on thread events, and gate message dispatch with custom policy.",
   "license": "MIT",
@@ -18,12 +18,16 @@
     "description": "Run your own shell commands or webhooks on thread events, and gate message dispatch with custom policy.",
     "branding": {
       "icon": "./assets/icon.svg",
+      "experimental_icons": {
+        "hook": "./assets/icon.svg"
+      },
       "logo": {
         "light": "./assets/logo.svg"
       }
     },
     "server": "./server.ts",
-    "app": "./app.tsx"
+    "app": "./app.tsx",
+    "skills": ["skills"]
   },
   "dependencies": {
     "@hugeicons/core-free-icons": "^4.1.3",

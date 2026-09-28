@@ -1,20 +1,26 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createFakePluginHost, makeMessageDispatchHookContext } from "@get-bb/plugin-sdk/testing";
+import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import plugin from "../server.js";
 import { hookSchema, type HookDefinition } from "../src/definitions.js";
 import { createRunner, decide } from "../src/runner.js";
 import { renderBody } from "../src/template.js";
-import { TEMPLATES, findTemplate, renderTemplate } from "../src/templates.js";
+import { renderTemplate, templateSchema, type HookTemplate } from "../src/templates.js";
+
+const FIXTURES = templateSchema.array().parse(JSON.parse(readFileSync(new URL("./template-fixtures.json", import.meta.url), "utf8"))) as HookTemplate[];
+function fixture(id: string): HookTemplate {
+  const template = FIXTURES.find((candidate) => candidate.id === id);
+  if (template === undefined) throw new Error(`no fixture ${id}`);
+  return template;
+}
 
 const dir = mkdtempSync(join(tmpdir(), "bb-hooks-templates-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 function requiredParams(templateId: string): Record<string, string> {
-  const template = findTemplate(templateId);
-  if (template === null) throw new Error(`no template ${templateId}`);
+  const template = fixture(templateId);
   return Object.fromEntries(
     template.params
       .filter((param) => param.required)
@@ -23,8 +29,7 @@ function requiredParams(templateId: string): Record<string, string> {
 }
 
 function renderOne(templateId: string, params: Record<string, string> = requiredParams(templateId), options = {}): HookDefinition {
-  const template = findTemplate(templateId);
-  if (template === null) throw new Error(`no template ${templateId}`);
+  const template = fixture(templateId);
   const rendered = renderTemplate(template, params, options);
   if ("error" in rendered) throw new Error(rendered.error);
   const first = rendered.hooks[0];
@@ -34,7 +39,7 @@ function renderOne(templateId: string, params: Record<string, string> = required
 
 describe("template catalog", () => {
   it("renders every template into valid hooks with only its required parameters", () => {
-    for (const template of TEMPLATES) {
+    for (const template of FIXTURES) {
       const rendered = renderTemplate(template, requiredParams(template.id));
       expect(rendered, template.id).not.toHaveProperty("error");
       if ("error" in rendered) continue;
@@ -55,7 +60,7 @@ describe("template catalog", () => {
   });
 
   it("names multi-event hooks after their event and honours --event and --id", () => {
-    const notify = findTemplate("desktop-notify")!;
+    const notify = fixture("desktop-notify");
     const all = renderTemplate(notify, {});
     if ("error" in all) throw new Error(all.error);
     expect(all.hooks.map((hook) => hook.id)).toEqual(["desktop-notify-interaction-pending", "desktop-notify-idle", "desktop-notify-failed"]);
@@ -65,11 +70,11 @@ describe("template catalog", () => {
   });
 
   it("reports unknown, missing and malformed parameters", () => {
-    expect(renderTemplate(findTemplate("slack")!, {})).toMatchObject({ error: expect.stringContaining("--set webhookUrl=") });
-    expect(renderTemplate(findTemplate("slack")!, { webhookUrl: "https://x", nope: "1" })).toMatchObject({ error: expect.stringContaining("unknown parameter nope") });
-    expect(renderTemplate(findTemplate("office-hours")!, { start: "nine" })).toMatchObject({ error: expect.stringContaining("must be an integer") });
-    expect(renderTemplate(findTemplate("block-pattern")!, { pattern: "x" }, { events: ["thread.idle"] })).toMatchObject({ error: expect.stringContaining("gate hook") });
-    expect(renderTemplate(findTemplate("slack")!, { webhookUrl: "https://x" }, { events: ["message.dispatch"] })).toMatchObject({ error: expect.stringContaining("observe hook") });
+    expect(renderTemplate(fixture("slack"), {})).toMatchObject({ error: expect.stringContaining("--set webhookUrl=") });
+    expect(renderTemplate(fixture("slack"), { webhookUrl: "https://x", nope: "1" })).toMatchObject({ error: expect.stringContaining("unknown parameter nope") });
+    expect(renderTemplate(fixture("office-hours"), { start: "nine" })).toMatchObject({ error: expect.stringContaining("must be an integer") });
+    expect(renderTemplate(fixture("block-pattern"), { pattern: "x" }, { events: ["thread.idle"] })).toMatchObject({ error: expect.stringContaining("gate hook") });
+    expect(renderTemplate(fixture("slack"), { webhookUrl: "https://x" }, { events: ["message.dispatch"] })).toMatchObject({ error: expect.stringContaining("observe hook") });
   });
 
   it("shell-quotes string parameters so they cannot break the script", async () => {
@@ -147,7 +152,7 @@ describe("gate templates", () => {
 });
 
 describe("bb hooks use", () => {
-  const { bb, harness } = createFakePluginHost({ pluginId: "hooks" });
+  const { bb, harness } = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
   beforeAll(async () => {
     await plugin(bb);
   });
@@ -155,39 +160,11 @@ describe("bb hooks use", () => {
     await harness.lifecycle.dispose();
   });
 
-  it("lists and describes templates", async () => {
+  it("ships no templates of its own", async () => {
     const list = await harness.behavior.runCli(["templates"]);
     expect(list.exitCode).toBe(0);
-    for (const template of TEMPLATES) expect(list.stdout).toContain(template.id);
-    const detail = await harness.behavior.runCli(["templates", "block-pattern"]);
-    expect(detail.stdout).toContain("--set pattern=");
-    expect(await harness.behavior.runCli(["templates", "nope"])).toMatchObject({ exitCode: 1 });
-  });
-
-  it("creates a working gate hook from block-pattern", async () => {
-    const result = await harness.behavior.runCli(["use", "block-pattern", "--set", "pattern=\\bprod\\b", "--set", "message=Production needs a human."]);
-    expect(result.exitCode, result.stderr).toBe(0);
-    expect(result.stdout).toContain('Added hook "block-pattern"');
-    const handler = harness.registrations.hooks["message.dispatch"]!;
-    await expect(handler(makeMessageDispatchHookContext({ input: { text: "deploy to prod now" } }))).resolves.toEqual({ action: "reject", message: "Production needs a human." });
-    await expect(handler(makeMessageDispatchHookContext({ input: { text: "deploy to staging" } }))).resolves.toEqual({ action: "proceed" });
-  });
-
-  it("creates one hook per event, applies filters, and refuses bad input", async () => {
-    const out = join(dir, "log.jsonl");
-    const result = await harness.behavior.runCli(["use", "log-to-file", "--set", `path=${out}`, "--event", "thread.idle", "--event", "thread.failed", "--project", "proj_a", "--id", "audit"]);
-    expect(result.exitCode, result.stderr).toBe(0);
-    const hooks = JSON.parse((await harness.behavior.runCli(["list", "--json"])).stdout).hooks as HookDefinition[];
-    const audit = hooks.filter((hook) => hook.id.startsWith("audit"));
-    expect(audit.map((hook) => [hook.id, hook.event, hook.match])).toEqual([
-      ["audit-idle", "thread.idle", { projectId: "proj_a" }],
-      ["audit-failed", "thread.failed", { projectId: "proj_a" }],
-    ]);
-    expect(existsSync(out)).toBe(false);
-
-    expect(await harness.behavior.runCli(["use", "slack"])).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("--set webhookUrl=") });
-    expect(await harness.behavior.runCli(["use", "slack", "--set", "bogus"])).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("key=value") });
-    expect(await harness.behavior.runCli(["use", "nope"])).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("No template") });
+    expect(list.stdout).toContain("No templates");
+    expect(await harness.behavior.runCli(["use", "block-pattern"])).toMatchObject({ exitCode: 1, stderr: expect.stringContaining("No template") });
   });
 });
 
@@ -206,7 +183,7 @@ describe("agent parameters", () => {
   });
 
   it("rejects agent values that are none of inherit, a provider id or JSON", () => {
-    const template = findTemplate("follow-up")!;
+    const template = fixture("follow-up");
     expect(renderTemplate(template, { prompt: "x", agent: "not a provider!" })).toMatchObject({ error: expect.stringContaining("agent") });
     expect(renderTemplate(template, { prompt: "x", agent: '{"model":"m"}' })).toMatchObject({ error: expect.stringContaining("providerId") });
   });

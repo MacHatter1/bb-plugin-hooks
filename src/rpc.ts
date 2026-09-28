@@ -129,8 +129,15 @@ export const rpcContract = defineRpcContract({
     output: z.object({ outcome: runOutcomeSchema, decision: decisionSchema.nullable(), payload: z.unknown() }),
   },
   history_list: {
-    input: z.object({ limit: z.number().int().min(1).max(200).optional(), hookId: z.string().optional() }).strict(),
-    output: z.array(runRecordSchema),
+    input: z
+      .object({
+        limit: z.number().int().min(1).max(200).optional(),
+        offset: z.number().int().min(0).max(100_000).optional(),
+        hookId: z.string().optional(),
+        status: z.enum(["ok", "failed"]).optional(),
+      })
+      .strict(),
+    output: z.object({ runs: z.array(runRecordSchema), total: z.number() }),
   },
   catalog_add: {
     input: z.object({ source: z.string().min(1) }).strict(),

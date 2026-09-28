@@ -1,6 +1,7 @@
 // The Installed tab: hooks with switches, last-run status, details, editing,
 // and the run log with filters.
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRealtime } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -170,7 +171,7 @@ export function InstalledTab({ onBrowse, onNewHook }: { onBrowse: () => void; on
         )}
       </section>
 
-      <RunLog runs={runs} hooks={hooks} onReload={reload} />
+      <RunLog hooks={hooks} onReload={reload} />
 
       {editing === null ? null : <HookEditor hook={editing === "new" ? null : editing} onClose={closeEditor} onSaved={closeEditor} />}
       {testing === null ? null : <TestDialog hook={testing.hook} result={testing.result} onClose={() => setTesting(null)} />}
@@ -328,20 +329,43 @@ function HookItem({ hook, lastRun, busy, onToggle, onTest, onEdit, onRemove }: {
   );
 }
 
-function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks: HookRow[]; onReload: () => void }) {
+const RUN_PAGE = 25;
+
+function RunLog({ hooks, onReload }: { hooks: HookRow[]; onReload: () => void }) {
   const { rpc } = useOverview();
   const [hookFilter, setHookFilter] = useState("all");
   const [status, setStatus] = useState<"all" | "ok" | "failed">("all");
+  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<RunRecordRow | null>(null);
-  const hookIds = useMemo(() => [...new Set([...hooks.map((hook) => hook.id), ...(runs ?? []).map((run) => run.hookId)])].sort(), [hooks, runs]);
-  const visible = useMemo(
-    () => (runs ?? []).filter((run) => (hookFilter === "all" || run.hookId === hookFilter) && (status === "all" || (status === "ok" ? run.status === "ok" : run.status !== "ok"))).slice(0, 50),
-    [runs, hookFilter, status],
-  );
+  const [data, setData] = useState<{ runs: RunRecordRow[]; total: number } | null>(null);
+  const hookIds = useMemo(() => [...new Set(hooks.map((hook) => hook.id))].sort(), [hooks]);
+  const filtered = hookFilter !== "all" || status !== "all";
+  const load = useCallback(() => {
+    rpc
+      .call("history_list", {
+        limit: RUN_PAGE,
+        offset: page * RUN_PAGE,
+        ...(hookFilter === "all" ? {} : { hookId: hookFilter }),
+        ...(status === "all" ? {} : { status }),
+      })
+      .then((next) => {
+        const pages = Math.max(1, Math.ceil(next.total / RUN_PAGE));
+        if (page > pages - 1) setPage(pages - 1);
+        else setData(next);
+      }, () => setData((prev) => prev ?? { runs: [], total: 0 }));
+  }, [rpc, page, hookFilter, status]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  useRealtime("hooks-changed", load);
+  const runs = data?.runs ?? [];
+  const total = data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / RUN_PAGE));
   const clear = async () => {
     try {
       const result = await rpc.call("history_clear");
       toast.success(`Cleared ${result.removed} run${result.removed === 1 ? "" : "s"}`);
+      setPage(0);
       onReload();
     } catch (cause) {
       toast.error(errorMessage(cause));
@@ -350,10 +374,16 @@ function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks:
   return (
     <section className="space-y-2">
       <SectionTitle
-        hint="Every hook run, newest first, kept live. Click a row for the full output."
+        hint="Every hook run, newest first. Click a row for the full output."
         actions={
           <div className="flex items-center gap-1.5">
-            <Select value={hookFilter} onValueChange={setHookFilter}>
+            <Select
+              value={hookFilter}
+              onValueChange={(value) => {
+                setHookFilter(value);
+                setPage(0);
+              }}
+            >
               <SelectTrigger className="h-8 w-40" aria-label="Filter by hook">
                 <SelectValue />
               </SelectTrigger>
@@ -366,10 +396,17 @@ function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks:
                 ))}
               </SelectContent>
             </Select>
-            <Chip active={status === "failed"} onClick={() => setStatus(status === "failed" ? "all" : "failed")} icon="AlertTriangle">
+            <Chip
+              active={status === "failed"}
+              onClick={() => {
+                setStatus(status === "failed" ? "all" : "failed");
+                setPage(0);
+              }}
+              icon="AlertTriangle"
+            >
               Failures
             </Chip>
-            <Button type="button" size="sm" variant="ghost" onClick={clear} disabled={(runs?.length ?? 0) === 0}>
+            <Button type="button" size="sm" variant="ghost" onClick={clear} disabled={data !== null && !filtered && total === 0}>
               Clear
             </Button>
           </div>
@@ -377,13 +414,14 @@ function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks:
       >
         Run log
       </SectionTitle>
-      {runs === null ? (
+      {data === null ? (
         <EmptyState icon="Loading" title="Loading…" />
-      ) : visible.length === 0 ? (
-        <EmptyState icon="Clock" title={runs.length === 0 ? "No runs yet" : "No runs match"}>
-          {runs.length === 0 ? "Runs appear here as events fire, or when you press Test on a hook." : undefined}
+      ) : runs.length === 0 ? (
+        <EmptyState icon="Clock" title={filtered ? "No runs match" : "No runs yet"}>
+          {filtered ? undefined : "Runs appear here as events fire, or when you press Test on a hook."}
         </EmptyState>
       ) : (
+        <div className="space-y-2">
         <div className="overflow-hidden rounded-lg border border-border">
           <Table>
             <TableHeader>
@@ -396,7 +434,7 @@ function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks:
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((run) => (
+              {runs.map((run) => (
                 <TableRow key={run.id} className="cursor-pointer" onClick={() => setSelected(run)}>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatWhen(run.startedAt)}</TableCell>
                   <TableCell className="font-mono text-xs">{run.hookId}</TableCell>
@@ -416,6 +454,20 @@ function RunLog({ runs, hooks, onReload }: { runs: RunRecordRow[] | null; hooks:
               ))}
             </TableBody>
           </Table>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {page * RUN_PAGE + 1}–{Math.min(total, (page + 1) * RUN_PAGE)} of {total}
+          </span>
+          <span className="flex items-center gap-1">
+            <Button type="button" size="sm" variant="outline" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>
+              Previous
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={page + 1 >= pages} onClick={() => setPage((current) => current + 1)}>
+              Next
+            </Button>
+          </span>
+        </div>
         </div>
       )}
       {selected === null ? null : (

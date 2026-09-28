@@ -61,9 +61,9 @@ Check each outgoing message before it reaches the provider. Let it through, reje
 <tr>
 <td valign="top">
 
-### 🧰 Start from a template
+### 🧰 Start from the marketplace
 
-Use built-in notifications, chat integrations, follow-up threads, review hooks, and message gates. Add community catalogs when you need more.
+A fresh install includes no hooks. Templates come from the marketplace catalog subscribed by default. Add another catalog when you need more.
 
 </td>
 <td valign="top">
@@ -104,6 +104,10 @@ Use `bb hooks` in a terminal. The bundled skills help agents create hooks from a
 </tr>
 </table>
 </div>
+
+## Templates
+
+Installing the plugin does not install any hooks. The default `catalogs` setting subscribes to [MacHatter1/bb-hooks-marketplace](https://github.com/MacHatter1/bb-hooks-marketplace). The Hooks page groups those templates by category, shows the author, and scores performance and security out of 100. The letter uses the usual scale: **A+** is 97–100, then A, A-, B+, B, B-, and so on down to F.
 
 ## Install
 
@@ -164,7 +168,7 @@ flowchart LR
 ## Privacy and control
 
 - 🖥️ **Commands run with the BB server's access.** They run on the machine hosting BB, as its user; review commands and catalog templates before installing them.
-- 🔑 **Secrets stay out of hook definitions.** Values are encrypted with AES-256-GCM in the plugin database and resolved only when a hook runs.
+- 🔑 **Secrets stay out of hook definitions.** Values are encrypted with AES-256-GCM in the plugin database and resolved only when a hook runs. Run history and test output redact those values.
 - 🌐 **You choose the plugin's HTTP destinations.** URL hooks send event JSON to the endpoint you configure. Shell commands run with the server user's access and can make their own network requests. Configured catalogs are fetched by the server; catalog templates require confirmation before installation.
 - ⏱️ **Gate hooks have a time limit.** Each gate run is capped at 8 seconds so it cannot hold message dispatch indefinitely.
 
@@ -217,7 +221,7 @@ Configure with `bb plugin config hooks`, or **Settings → Installed plugins →
 | `historyLimit` | `200` | Number of runs to keep; `0` disables history. Range: 0–10,000. |
 | `maxConcurrent` | `8` | Maximum concurrent observe-hook runs; applies after reload. Range: 1–64. |
 | `webhookSecret` | unset | Optional HMAC-SHA256 signing secret for webhook requests. |
-| `catalogs` | `starter` and `MacHatter1/bb-hooks-marketplace` | Catalog sources, one per line. The plugin refreshes them periodically. |
+| `catalogs` | `MacHatter1/bb-hooks-marketplace` | Catalog sources, one per line. The plugin refreshes them periodically. |
 | `secretsKey` | generated on first load | Encryption key for stored secrets. Changing it makes existing secrets unreadable. |
 
 </details>

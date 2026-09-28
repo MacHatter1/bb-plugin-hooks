@@ -101,6 +101,7 @@ echo "reason" >&2; exit 3    wait     (queued with the reason)
 {{path|300}}      truncated to 300 characters
 {{secret:name}}   a stored secret (url, headers, body); in a
                   command it becomes "$BB_SECRET_NAME"
+                  values of 8+ characters are redacted from run output
 
 Webhook headers: x-bb-hooks-event, x-bb-hooks-id and, when the
 signing secret is set, x-bb-hooks-timestamp plus

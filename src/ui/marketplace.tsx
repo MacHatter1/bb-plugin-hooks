@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { rateTemplate, type Score } from "../rating";
 import { AgentField } from "./agent-field";
 import {
   CATEGORIES,
@@ -39,7 +40,7 @@ function matchesQuery(entry: TemplateEntry, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (needle === "") return true;
   const { template } = entry;
-  return [entry.ref, template.name, template.summary, template.description ?? "", template.notes ?? "", (template.tags ?? []).join(" "), template.events.join(" ")]
+  return [entry.ref, template.name, template.summary, template.description ?? "", template.notes ?? "", template.author ?? "", (template.tags ?? []).join(" "), template.events.join(" ")]
     .join("\n")
     .toLowerCase()
     .includes(needle);
@@ -87,7 +88,7 @@ export function MarketplaceTab({ onInstalled, initialSource, onManageSources }: 
   };
 
   const templates = data?.templates ?? [];
-  const sources = useMemo(() => ["bundled", ...[...new Set(templates.map((entry) => entry.source))].filter((name) => name !== "bundled").sort()], [templates]);
+  const sources = useMemo(() => [...new Set(templates.map((entry) => entry.source))].sort((a, b) => (a === "bundled" ? -1 : b === "bundled" ? 1 : a.localeCompare(b))), [templates]);
   const categoryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const entry of templates) {
@@ -317,8 +318,32 @@ export function MarketplaceTab({ onInstalled, initialSource, onManageSources }: 
   );
 }
 
+function RatingChip({ icon, caption, score }: { icon: string; caption: string; score: Score }) {
+  return (
+    <span title={`${caption}: ${score.score} ${score.letter}. ${score.reason}`} className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[10px] leading-4 text-muted-foreground">
+      <Icon name={icon} className="size-3" />
+      <span className="font-medium text-foreground">{score.score}</span>
+      <span>{score.letter}</span>
+      <span className="sr-only">
+        {caption} {score.score} out of 100, {score.letter}. {score.reason}
+      </span>
+    </span>
+  );
+}
+
+function Ratings({ template }: { template: TemplateEntry["template"] }) {
+  const rating = rateTemplate(template);
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      <RatingChip icon="Zap" caption="Performance" score={rating.performance} />
+      <RatingChip icon="SecurityCheck" caption="Security" score={rating.security} />
+    </span>
+  );
+}
+
 function TemplateCard({ entry, installedCount, onOpen }: { entry: TemplateEntry; installedCount: number; onOpen: (mode: "about" | "install") => void }) {
   const { template } = entry;
+  const category = categoryOf(template);
   const events = template.events.slice(0, 3);
   const more = template.events.length - events.length;
   return (
@@ -334,6 +359,14 @@ function TemplateCard({ entry, installedCount, onOpen }: { entry: TemplateEntry;
             <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">{template.summary}</span>
           </span>
         </span>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <Icon name={category.icon} className="size-3" />
+            {category.label}
+          </span>
+          {template.author ? <span className="truncate">by {template.author}</span> : null}
+        </span>
+        <Ratings template={template} />
         <span className="flex flex-nowrap items-center gap-1 overflow-hidden whitespace-nowrap">
           {events.map((event) => (
             <EventPill key={event} event={event} />
@@ -350,7 +383,6 @@ function TemplateCard({ entry, installedCount, onOpen }: { entry: TemplateEntry;
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-border px-4 py-2">
         <span className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] text-muted-foreground">
           <SourceBadge source={entry.source} />
-          {template.author ? <span className="truncate">by {template.author}</span> : null}
         </span>
         <span className="flex shrink-0 items-center gap-1">
           <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onOpen("about")}>
@@ -395,7 +427,14 @@ function TemplateList({ entries, installed, onOpen }: { entries: TemplateEntry[]
               ))}
               {template.events.length > 2 ? <span className="text-[11px] text-muted-foreground">+{template.events.length - 2}</span> : null}
             </div>
-            <span className="hidden w-24 shrink-0 truncate text-[11px] text-muted-foreground md:block">{template.author ? `by ${template.author}` : ""}</span>
+            <span className="hidden shrink-0 items-center gap-2 text-[11px] text-muted-foreground lg:flex">
+              <span className="inline-flex items-center gap-1">
+                <Icon name={categoryOf(template).icon} className="size-3" />
+                {categoryOf(template).label}
+              </span>
+              {template.author ? <span className="max-w-28 truncate">by {template.author}</span> : null}
+              <Ratings template={template} />
+            </span>
             <Button type="button" size="sm" className="h-7 px-2.5 text-xs" onClick={() => onOpen(entry, "install")}>
               <Icon name="Plus" className="size-3.5" />
               Install
@@ -444,6 +483,7 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
   const [error, setError] = useState<string | null>(null);
   const missing = template.params.filter((param) => param.required && (params[param.key] ?? "").trim() === "").map((param) => param.label);
   const category = categoryOf(template);
+  const rating = rateTemplate(template);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -518,6 +558,24 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
                   <dd className="mt-0.5 flex items-center gap-1.5">
                     <Icon name={category.icon} className="size-3.5" />
                     {category.label}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">Author</dt>
+                  <dd className="mt-0.5">{template.author ?? "Not listed"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">Performance</dt>
+                  <dd className="mt-0.5 space-y-1">
+                    <RatingChip icon="Zap" caption="Performance" score={rating.performance} />
+                    <p className="text-xs text-muted-foreground">{rating.performance.reason}</p>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-muted-foreground">Security</dt>
+                  <dd className="mt-0.5 space-y-1">
+                    <RatingChip icon="SecurityCheck" caption="Security" score={rating.security} />
+                    <p className="text-xs text-muted-foreground">{rating.security.reason}</p>
                   </dd>
                 </div>
                 <div>
