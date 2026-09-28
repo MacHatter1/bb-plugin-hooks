@@ -25,6 +25,8 @@ import { prepareDispatch, prepareObserveEvent, prepareSample, type PreparedEvent
 import { createRunner, decide, describeDecision, type Decision, type RunOutcome, type Runner } from "./src/runner.js";
 import { rpcContract } from "./src/rpc.js";
 import { SECRET_MIGRATIONS, createSecretStore, generateKey, hookSecretRefs, type SecretStore } from "./src/secrets.js";
+import { SHARE_INSTALLS, type InstallStats, type ShareInstalls } from "./src/stats.js";
+import { sendInstallReport } from "./src/stats-report.js";
 import { HISTORY_MIGRATIONS, createHistoryStore, createHookStore, type HookStore } from "./src/store.js";
 import { TEMPLATES } from "./src/templates.js";
 
@@ -79,6 +81,14 @@ export default async function plugin(bb: BbPluginApi) {
       description: "One per line: an https URL of a hooks-catalog.json, a GitHub owner/repo, or `starter`. `bb hooks marketplace add` writes here too.",
       experimental_multiline: true,
       default: "starter\nMacHatter1/bb-hooks-marketplace",
+    },
+    shareInstalls: {
+      type: "select",
+      label: "Share anonymous install counts",
+      description:
+        "Counts installs from the BB Hooks Marketplace catalog only. When on, each new install from it sends the template id and version, and nothing else. ask: BB asks on your first such install.",
+      options: [...SHARE_INSTALLS],
+      default: "ask",
     },
     secretsKey: {
       type: "string",
@@ -270,7 +280,7 @@ export default async function plugin(bb: BbPluginApi) {
   });
   settings.onChange((next, prev) => {
     if (next.catalogs !== prev.catalogs) void refreshAll();
-    if (next.hooks !== prev.hooks || next.enabled !== prev.enabled) notify("settings");
+    if (next.hooks !== prev.hooks || next.enabled !== prev.enabled || next.shareInstalls !== prev.shareInstalls) notify("settings");
   });
 
   // Gate hooks get their own lane so a burst of slow observe hooks can never
@@ -478,7 +488,18 @@ export default async function plugin(bb: BbPluginApi) {
     return { ...buildDelivery(hook, prepared, startedAt), outcome, decision: gate ? decide(hook, outcome).decision : null };
   }
 
-  const actionDeps = { store, secrets, registry };
+  const stats: InstallStats = {
+    consent: () => ((SHARE_INSTALLS as readonly string[]).includes(current.shareInstalls ?? "") ? (current.shareInstalls as ShareInstalls) : "ask"),
+    async setConsent(value) {
+      await settings.experimental_set({ shareInstalls: value });
+    },
+    report(body) {
+      void sendInstallReport(body).then((sent) => {
+        if (!sent) bb.log.debug(`install count for ${body.catalog}/${body.template} was not accepted`);
+      });
+    },
+  };
+  const actionDeps = { store, secrets, registry, stats };
   bb.rpc.register(rpcContract, {
     async overview() {
       const hooks = await store.list();
@@ -486,6 +507,7 @@ export default async function plugin(bb: BbPluginApi) {
       for (const hook of hooks) for (const ref of hookSecretRefs(hook)) usage.set(ref, (usage.get(ref) ?? 0) + 1);
       return {
         enabled: current.enabled,
+        shareInstalls: stats.consent(),
         hooks,
         hooksError: store.lastError(),
         templates: registry.list(),
@@ -552,7 +574,7 @@ export default async function plugin(bb: BbPluginApi) {
     name: "hooks",
     summary: "Create custom hooks: run a shell command or webhook on BB thread events, or gate message dispatch",
     commands: CLI_COMMANDS,
-    run: createCliRun({ store, history, secrets, registry, marketplace, test }),
+    run: createCliRun({ store, history, secrets, registry, marketplace, stats, test }),
   });
 
   bb.onDispose(() => {
