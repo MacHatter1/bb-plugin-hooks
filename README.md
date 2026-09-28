@@ -171,6 +171,7 @@ flowchart LR
 - 🔑 **Secrets stay out of hook definitions.** Values are encrypted with AES-256-GCM in the plugin database and resolved only when a hook runs. Run history and test output redact those values.
 - 🌐 **You choose the plugin's HTTP destinations.** URL hooks send event JSON to the endpoint you configure. Shell commands run with the server user's access and can make their own network requests. Configured catalogs are fetched by the server; catalog templates require confirmation before installation.
 - ⏱️ **Gate hooks have a time limit.** Each gate run is capped at 8 seconds so it cannot hold message dispatch indefinitely.
+- 📊 **Install counts are opt-in, and only for the BB Hooks Marketplace.** BB asks before sending any, then reports only the template id and version of each new install from that catalog. Installs from other catalogs are never reported. Change your answer with `bb hooks marketplace stats on|off`.
 
 ## CLI
 
@@ -193,6 +194,7 @@ bb hooks history --limit 20
 | `templates [<template>] [--search <text>] [--json]` | Search templates or show one. |
 | `use <template> [--set key=value]… [--id id] [--event event]… [--project id] [--provider id] [--title regex] [--text regex] [--disabled] [--yes]` | Create hooks from a template. Catalog templates require `--yes`. |
 | `marketplace list\|add <src>\|remove <src>\|refresh [src]\|search <text>\|validate <src>\|init [--name catalog]` | Manage and validate catalog sources. |
+| `marketplace stats [on\|off\|ask]` | Show or change whether new installs from the BB Hooks Marketplace are reported to its install counter. |
 | `secrets list\|set <name> <value>\|remove <name>` | Manage encrypted secrets. |
 | `show <id>` | Show a hook as JSON. |
 | `add <id> --event <event> (--command <shell> \| --url <url>) [--project id] [--provider id] [--title regex] [--text regex] [--timeout ms] [--cwd dir] [--header k=v]… [--on-error proceed\|reject\|wait] [--description text] [--disabled]` | Create a hook. |
@@ -222,6 +224,7 @@ Configure with `bb plugin config hooks`, or **Settings → Installed plugins →
 | `maxConcurrent` | `8` | Maximum concurrent observe-hook runs; applies after reload. Range: 1–64. |
 | `webhookSecret` | unset | Optional HMAC-SHA256 signing secret for webhook requests. |
 | `catalogs` | `MacHatter1/bb-hooks-marketplace` | Catalog sources, one per line. The plugin refreshes them periodically. |
+| `shareInstalls` | `ask` | Whether to report new BB Hooks Marketplace installs to its install counter: `ask` (BB asks on the first one), `on` or `off`. |
 | `secretsKey` | generated on first load | Encryption key for stored secrets. Changing it makes existing secrets unreadable. |
 
 </details>

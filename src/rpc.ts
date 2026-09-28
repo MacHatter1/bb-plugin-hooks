@@ -4,6 +4,7 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { catalogSchema } from "./catalog.js";
 import { HOOK_EVENTS, hookSchema } from "./definitions.js";
+import { SHARE_INSTALLS } from "./stats.js";
 import { templateSchema } from "./templates.js";
 
 export const registryEntrySchema = z.object({
@@ -80,6 +81,7 @@ export const rpcContract = defineRpcContract({
     input: z.null(),
     output: z.object({
       enabled: z.boolean(),
+      shareInstalls: z.enum(SHARE_INSTALLS),
       hooks: z.array(hookSchema),
       hooksError: z.string().nullable(),
       templates: z.array(registryEntrySchema),
@@ -99,6 +101,8 @@ export const rpcContract = defineRpcContract({
         match: matchInputSchema.optional(),
         enabled: z.boolean().optional(),
         trusted: z.boolean().optional(),
+        /** The user's answer when asked whether to share install counts. */
+        shareInstalls: z.boolean().optional(),
       })
       .strict(),
     output: z.object({ hooks: z.array(hookSchema), replaced: z.array(z.string()), secrets: z.array(z.string()) }),

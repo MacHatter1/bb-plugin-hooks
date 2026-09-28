@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { rateTemplate, type Score } from "../rating";
+import { COUNTED_CATALOG, countsInstalls } from "../stats";
 import { AgentField } from "./agent-field";
 import {
   CATEGORIES,
@@ -479,6 +480,9 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
   const [text, setText] = useState("");
   const [advanced, setAdvanced] = useState(false);
   const [trusted, setTrusted] = useState(entry.source === "bundled");
+  // Asked once: the first install from the marketplace catalog records the answer.
+  const askShare = countsInstalls(entry) && data?.shareInstalls === "ask";
+  const [share, setShare] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const missing = template.params.filter((param) => param.required && (params[param.key] ?? "").trim() === "").map((param) => param.label);
@@ -500,6 +504,7 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
       if (!gate) input.events = events as typeof template.events;
       if (hookId.trim() !== "" && hookId.trim() !== template.id) input.id = hookId.trim();
       if (Object.keys(match).length > 0) input.match = match;
+      if (askShare) input.shareInstalls = share;
       const result = await rpc.call("template_use", input);
       toast.success(`Installed ${result.hooks.length === 1 ? `"${result.hooks[0]?.id}"` : `${result.hooks.length} hooks`}${result.secrets.length > 0 ? ", secret stored encrypted" : ""}`);
       refetch();
@@ -691,6 +696,14 @@ function TemplateDialog({ entry, mode, onClose, onInstalled }: { entry: Template
                       <Input value={text} onChange={(event) => setText(event.target.value)} placeholder="#overnight" />
                     </Field>
                   </div>
+                ) : null}
+                {askShare ? (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs">
+                    <Checkbox checked={share} onCheckedChange={(value) => setShare(value === true)} className="mt-0.5" />
+                    <span>
+                      Share an anonymous install count with the <strong>{COUNTED_CATALOG.label}</strong>: this template's id and version, and nothing else. BB remembers your answer; change it in the Hooks settings.
+                    </span>
+                  </label>
                 ) : null}
                 {entry.source !== "bundled" ? (
                   <label className="flex cursor-pointer items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs">

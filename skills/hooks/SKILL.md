@@ -20,6 +20,7 @@ Secrets); point them there for browsing and forms, and use the CLI yourself.
 | `bb hooks use <template> --set key=value…` | Create hooks from it. `--event` overrides events (repeatable), `--id` renames, `--project`/`--provider`/`--title`/`--text` filter. |
 
 | `bb hooks marketplace add owner/repo` | Subscribe to a catalog (`hooks-catalog.json` in a GitHub repo, or an https URL). Then `bb hooks templates --search <text>` and `bb hooks use catalog/template --yes`. |
+| `bb hooks marketplace stats [on\|off]` | Show or set whether new BB Hooks Marketplace installs are reported to its install counter. Leave the choice to the user; never switch it on for them. |
 | `bb hooks secrets set <name> <value>` | Store a credential encrypted; reference it as `{{secret:<name>}}`. Secret template params are stored this way automatically. |
 | `bb hooks export <id>` | Turn a hook into a template JSON for a catalog; `bb hooks marketplace init` prints a starter catalog. |
 

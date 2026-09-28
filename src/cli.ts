@@ -19,6 +19,7 @@ import {
 import { formatMark, rateTemplate } from "./rating.js";
 import { describeDecision, type Decision, type RunOutcome } from "./runner.js";
 import { SECRET_PLACEHOLDER, hookSecretRefs, type SecretStore } from "./secrets.js";
+import { COUNTED_CATALOG, SHARE_INSTALLS, countsInstalls, type InstallStats, type ShareInstalls } from "./stats.js";
 import type { HistoryStore, HookStore } from "./store.js";
 import type { HookTemplate } from "./templates.js";
 
@@ -48,6 +49,7 @@ export interface CliDeps {
   secrets: SecretStore;
   registry: TemplateRegistry;
   marketplace: MarketplaceOps;
+  stats?: InstallStats;
   test(hook: HookDefinition, threadId: string | null, signal?: AbortSignal): Promise<TestResult>;
 }
 
@@ -60,7 +62,7 @@ export const CLI_COMMANDS: PluginCliCommandInfo[] = [
     summary: "Create hooks from a template; catalog templates need --yes after you have read what they run",
     usage: "bb hooks use <template|catalog/template> [--set key=value]… [--id <hook-id>] [--event <event>]… [--project <proj_id>] [--provider <id>] [--title <regex>] [--text <regex>] [--disabled] [--yes]",
   },
-  { name: "marketplace", summary: "Manage catalog sources: list, add, remove, refresh, search, validate, init", usage: "bb hooks marketplace <list|add <src>|remove <src>|refresh [src]|search <text>|validate <src>|init [--name <catalog>]>" },
+  { name: "marketplace", summary: "Manage catalog sources: list, add, remove, refresh, search, validate, init", usage: "bb hooks marketplace <list|add <src>|remove <src>|refresh [src]|search <text>|validate <src>|init [--name <catalog>]|stats [on|off|ask]>" },
   { name: "secrets", summary: "Encrypted values hooks reference as {{secret:NAME}}", usage: "bb hooks secrets <list|set <name> <value>|remove <name>>" },
   { name: "show", summary: "Show one hook as JSON", usage: "bb hooks show <id>" },
   {
@@ -390,12 +392,18 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
           if (result.code === "invalid" && result.entry !== undefined) return fail(`${result.message}\n\n${describeTemplate(result.entry, false)}`);
           return fail(result.message);
         }
-        if (values.json) return json({ hooks: result.hooks, secrets: result.secrets });
+        if (values.json) return json({ hooks: result.hooks, secrets: result.secrets, shareInstalls: result.shareInstalls });
         const lines = result.hooks.map((hook) => `${result.replaced.includes(hook.id) ? "Replaced" : "Added"} hook "${hook.id}" on ${hook.event}${hook.match ? ` (${matchOf(hook)})` : ""}`);
         for (const name of result.secrets) lines.push(`Stored secret "${name}" (encrypted; rotate with: bb hooks secrets set ${name} <value>)`);
         const first = result.hooks[0];
         lines.push("", `Test it: bb hooks test ${first?.id ?? ""}   Inspect: bb hooks show ${first?.id ?? ""}`);
         if (result.entry.template.notes !== undefined) lines.push(`Note: ${result.entry.template.notes}`);
+        if (result.shareInstalls === "ask") {
+          lines.push(
+            `The ${COUNTED_CATALOG.label} counts installs anonymously (template and version; nothing else).`,
+            `Share yours with "bb hooks marketplace stats on", or stop this note with "bb hooks marketplace stats off".`,
+          );
+        }
         return ok(lines.join("\n"));
       }
       case "marketplace": {
@@ -455,6 +463,22 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
           }
           case "init":
             return ok(starterCatalogJson(values.name));
+          case "stats": {
+            if (deps.stats === undefined) return fail("Install counts are not available here.");
+            if (arg !== undefined) {
+              if (!(SHARE_INSTALLS as readonly string[]).includes(arg)) return fail(`bb hooks marketplace stats takes ${SHARE_INSTALLS.join(", ")}, not "${arg}"`);
+              await deps.stats.setConsent(arg as ShareInstalls);
+            }
+            const consent = deps.stats.consent();
+            const subscribed = deps.registry.list().some(countsInstalls);
+            if (values.json) return json({ shareInstalls: consent, catalog: COUNTED_CATALOG.name, subscribed });
+            const state = { on: "on: new installs are reported", off: "off: nothing is reported", ask: "ask: nothing is reported until you choose on or off" }[consent];
+            return ok(
+              `Share anonymous install counts with the ${COUNTED_CATALOG.label}: ${state}.\n` +
+                `Only installs from that catalog are counted, and a report is the template id and version; nothing else.\n` +
+                (subscribed ? "" : `You are not subscribed to it; add it with "bb hooks marketplace add MacHatter1/bb-hooks-marketplace".`),
+            );
+          }
           default:
             return fail(`Unknown marketplace command "${sub}".\n\n${USAGE}`);
         }
