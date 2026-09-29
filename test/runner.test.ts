@@ -69,7 +69,7 @@ describe("decide", () => {
   it("applies onError to failures and timeouts", async () => {
     const crashed = await runner.run({ hook: gate("exit 7"), payload: {}, env: {}, timeoutMs: 2_000 });
     expect(decide(gate("", { onError: undefined }), crashed)).toMatchObject({ decision: { action: "proceed" }, fromError: true });
-    expect(decide(gate("", { onError: "reject" }), crashed).decision).toMatchObject({ action: "reject", message: expect.stringContaining("failed") });
+    expect(decide(gate("", { onError: "reject" }), crashed).decision).toMatchObject({ action: "reject", message: expect.stringContaining("exited 7") });
     const timedOut = await runner.run({ hook: gate("sleep 5"), payload: {}, env: {}, timeoutMs: 100 });
     expect(decide(gate("", { onError: "wait" }), timedOut).decision).toMatchObject({ action: "wait", reason: expect.stringContaining("timed out") });
   });
@@ -95,6 +95,15 @@ describe("url hooks", () => {
     expect(headers["x-bb-hooks-event"]).toBe("message.dispatch");
     const expected = createHmac("sha256", "s3cret").update(`${headers["x-bb-hooks-timestamp"]}.${String(call?.init.body)}`).digest("hex");
     expect(headers["x-bb-hooks-signature"]).toBe(`sha256=${expected}`);
+    expect(call?.init.redirect).toBe("error");
+  });
+
+  it("strips secret values out of command output", async () => {
+    const hook: HookDefinition = { id: "s", event: "thread.idle", command: "printf %s {{secret:token}}", enabled: true };
+    const outcome = await runner.run({ hook, payload: {}, env: {}, timeoutMs: 2_000, secrets: () => "super-secret-value" });
+    expect(outcome.status).toBe("ok");
+    expect(outcome.stdout).toBe("••••");
+    expect(outcome.stdout).not.toContain("super-secret-value");
   });
 
   it("treats a non-2xx response as an error", async () => {

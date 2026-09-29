@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import plugin from "../server.js";
 
 const dir = mkdtempSync(join(tmpdir(), "bb-hooks-server-"));
-const host = createFakePluginHost({ pluginId: "hooks" });
+const host = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
 const { bb, harness } = host;
 
 beforeAll(async () => {
@@ -131,6 +131,14 @@ describe("execution settings for inherit", () => {
     expect(harness.inspection.sdk.callsTo("threads.defaultExecutionOptions").length).toBe(1);
     await harness.behavior.runCli(["remove", "plain"]);
   });
+
+  it("passes BB_CLI to command hooks", async () => {
+    const out = join(dir, "cli.txt");
+    await harness.behavior.runCli(["add", "show-cli", "--event", "thread.idle", "--command", `printf '%s' "$BB_CLI" > "${out}"`]);
+    await harness.behavior.emitThreadEvent("thread.idle", { thread: makeThreadResponse({ id: "thr_cli", projectId: "proj_a" }), lastAssistantText: null });
+    await waitFor(() => existsSync(out) && readFileSync(out, "utf8").includes("bb"));
+    await harness.behavior.runCli(["remove", "show-cli"]);
+  });
 });
 
 describe("gate hooks", () => {
@@ -157,7 +165,7 @@ describe("gate hooks", () => {
     await expect(dispatch()(makeMessageDispatchHookContext())).resolves.toEqual({ action: "wait", reason: "after hours", sendAt: 4102444800000 });
     await harness.behavior.runCli(["edit", "crashy", "--on-error", "reject"]);
     await harness.behavior.runCli(["remove", "hold"]);
-    await expect(dispatch()(makeMessageDispatchHookContext())).resolves.toMatchObject({ action: "reject", message: expect.stringContaining('hook "crashy" failed') });
+    await expect(dispatch()(makeMessageDispatchHookContext())).resolves.toMatchObject({ action: "reject", message: expect.stringContaining("exited 9") });
     await harness.behavior.runCli(["remove", "crashy"]);
   });
 
@@ -168,6 +176,18 @@ describe("gate hooks", () => {
     expect(Date.now() - started).toBeLessThan(9_500);
     expect(decision).toMatchObject({ action: "reject", message: expect.stringContaining("timed out") });
     await harness.behavior.runCli(["remove", "slow-gate"]);
+  }, 15_000);
+
+  it("records a later gate hook that the dispatch budget skips", async () => {
+    await harness.behavior.runCli(["add", "slow-a", "--event", "message.dispatch", "--command", "sleep 30", "--timeout", "600000"]);
+    await harness.behavior.runCli(["add", "slow-b", "--event", "message.dispatch", "--command", "sleep 30", "--timeout", "600000"]);
+    await harness.behavior.runCli(["add", "skipped-gate", "--event", "message.dispatch", "--command", "echo should-not-run", "--on-error", "reject"]);
+    await expect(dispatch()(makeMessageDispatchHookContext())).resolves.toMatchObject({ action: "reject", message: expect.stringContaining("dispatch budget exhausted") });
+    const history = JSON.parse((await harness.behavior.runCli(["history", "--json", "--hook", "skipped-gate"])).stdout);
+    expect(history[0]).toMatchObject({ status: "timeout", error: "dispatch budget exhausted" });
+    await harness.behavior.runCli(["remove", "slow-a"]);
+    await harness.behavior.runCli(["remove", "slow-b"]);
+    await harness.behavior.runCli(["remove", "skipped-gate"]);
   }, 15_000);
 });
 

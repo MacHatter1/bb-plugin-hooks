@@ -1,12 +1,31 @@
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { createFakePluginHost } from "@get-bb/plugin-sdk/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import plugin from "../server.js";
 import { catalogSchema, createRegistry, fetchCatalog, parseSourceInput, starterCatalogJson, type Catalog } from "../src/catalog.js";
-import { STARTER_CATALOG } from "../src/community-catalog.js";
 import { hookToTemplate } from "../src/cli.js";
 import { hookSchema } from "../src/definitions.js";
-import { TEMPLATES, templateSchema } from "../src/templates.js";
+import { templateSchema, type HookTemplate } from "../src/templates.js";
+
+function fixtureCatalog(ids: readonly string[]): Catalog {
+  const fixtures = templateSchema.array().parse(JSON.parse(readFileSync(new URL("./template-fixtures.json", import.meta.url), "utf8"))) as HookTemplate[];
+  return { name: "community", templates: fixtures.filter((template) => ids.includes(template.id)) };
+}
+
+async function serveCatalog(catalog: Catalog): Promise<{ url: string; close: () => Promise<void> }> {
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(catalog));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("no port");
+  return {
+    url: `http://127.0.0.1:${address.port}/hooks-catalog.json`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
 
 const remote: Catalog = {
   name: "acme",
@@ -35,10 +54,9 @@ const remote: Catalog = {
 };
 
 describe("catalog documents", () => {
-  it("validates the bundled templates, the starter catalog and the init document", () => {
-    for (const template of TEMPLATES) expect(templateSchema.safeParse(template).success, template.id).toBe(true);
-    expect(catalogSchema.safeParse(STARTER_CATALOG).success).toBe(true);
+  it("validates the init document", () => {
     expect(catalogSchema.safeParse(JSON.parse(starterCatalogJson("mine"))).success).toBe(true);
+    expect(templateSchema.safeParse(remote.templates[0]).success).toBe(true);
   });
 
   it("rejects broken catalogs", () => {
@@ -83,19 +101,17 @@ describe("fetchCatalog", () => {
 });
 
 describe("registry", () => {
-  const registry = createRegistry(TEMPLATES, () => [{ url: "https://x/c.json", name: "acme", etag: null, fetchedAt: 1, catalog: remote, error: null }]);
+  const registry = createRegistry([], () => [{ url: "https://x/c.json", name: "acme", etag: null, fetchedAt: 1, catalog: remote, error: null }]);
 
-  it("lists bundled and catalog templates with refs", () => {
+  it("lists catalog templates with refs", () => {
     const refs = registry.list().map((entry) => entry.ref);
-    expect(refs).toContain("slack");
-    expect(refs).toContain("acme/pager");
-    expect(refs).toContain("acme/desktop-notify");
+    expect(refs).toEqual(["acme/pager", "acme/desktop-notify"]);
   });
 
   it("resolves exact refs, unique bare ids, and reports ambiguity", () => {
     expect(registry.resolve("acme/pager")).toMatchObject({ entry: { source: "acme" } });
     expect(registry.resolve("pager")).toMatchObject({ entry: { ref: "acme/pager" } });
-    expect(registry.resolve("desktop-notify")).toMatchObject({ entry: { source: "bundled" } });
+    expect(registry.resolve("desktop-notify")).toMatchObject({ entry: { source: "acme" } });
     expect(registry.resolve("nope")).toMatchObject({ error: expect.stringContaining("No template") });
     expect(registry.search("on-call").map((entry) => entry.ref)).toEqual(["acme/pager"]);
   });
@@ -105,7 +121,7 @@ describe("bb hooks marketplace (live over loopback)", () => {
   let server: Server;
   let url = "";
   let served = 0;
-  // The real plugin subscribes to its own `starter` catalog by default; start empty here.
+  // Start with no catalogs so this test controls the only source.
   const { bb, harness } = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
 
   beforeAll(async () => {
@@ -169,10 +185,10 @@ describe("bb hooks marketplace (live over loopback)", () => {
     expect((await harness.behavior.runCli(["secrets", "list"])).stdout).toContain("No secrets");
   });
 
-  it("disambiguates ids shared with bundled templates", async () => {
-    const bundled = await harness.behavior.runCli(["use", "desktop-notify", "--event", "thread.idle", "--id", "dn"]);
-    expect(bundled.exitCode, bundled.stderr).toBe(0);
-    expect(JSON.parse((await harness.behavior.runCli(["show", "dn"])).stdout).template.source).toBe("bundled");
+  it("installs a catalog template only after confirmation", async () => {
+    const bare = await harness.behavior.runCli(["use", "desktop-notify", "--event", "thread.idle", "--id", "dn"]);
+    expect(bare.exitCode).toBe(1);
+    expect(bare.stderr).toContain("--yes");
     const external = await harness.behavior.runCli(["use", "acme/desktop-notify", "--id", "dn2", "--yes"]);
     expect(external.exitCode, external.stderr).toBe(0);
     expect(JSON.parse((await harness.behavior.runCli(["show", "dn2"])).stdout)).toMatchObject({ command: "echo acme", template: { source: "acme" } });
@@ -203,24 +219,30 @@ describe("bb hooks marketplace (live over loopback)", () => {
 
 describe("marketplace page RPC", () => {
   const { bb, harness } = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
+  let closeCatalog: (() => Promise<void>) | undefined;
   beforeAll(async () => {
+    const served = await serveCatalog(fixtureCatalog(["slack", "block-pattern"]));
+    closeCatalog = served.close;
     await plugin(bb);
+    const added = await harness.behavior.runCli(["marketplace", "add", served.url]);
+    expect(added.exitCode, added.stderr).toBe(0);
   });
   afterAll(async () => {
     await harness.lifecycle.dispose();
+    await closeCatalog?.();
   });
 
   it("serves the overview the page renders", async () => {
     const overview = (await harness.behavior.callRpc("overview")) as { hooks: unknown[]; templates: { ref: string }[]; catalogs: unknown[]; secrets: unknown[]; events: unknown[]; enabled: boolean };
     expect(overview.enabled).toBe(true);
     expect(overview.hooks).toEqual([]);
-    expect(overview.templates.map((entry) => entry.ref)).toContain("slack");
+    expect(overview.templates.map((entry) => entry.ref)).toContain("community/slack");
     expect(overview.events.length).toBe(15);
   });
 
   it("installs, tests, toggles and removes through RPC and announces changes", async () => {
     const before = harness.inspection.realtimeSignals.length;
-    const installed = (await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "https://hooks.slack.test/rpc" }, events: ["thread.idle"], trusted: false })) as { hooks: { id: string; url?: string }[]; secrets: string[] };
+    const installed = (await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "https://hooks.slack.test/rpc" }, events: ["thread.idle"], trusted: true })) as { hooks: { id: string; url?: string }[]; secrets: string[] };
     expect(installed.hooks.map((hook) => hook.id)).toEqual(["slack"]);
     expect(installed.hooks[0]?.url).toBe("{{secret:slack/webhookUrl}}");
     expect(installed.secrets).toEqual(["slack/webhookUrl"]);
@@ -244,13 +266,13 @@ describe("marketplace page RPC", () => {
   });
 
   it("runs a hook test and lists history through RPC", async () => {
-    await harness.behavior.callRpc("template_use", { ref: "block-pattern", params: { pattern: "x" } });
+    await harness.behavior.callRpc("template_use", { ref: "block-pattern", params: { pattern: "x" }, trusted: true });
     const result = (await harness.behavior.callRpc("hook_test", { id: "block-pattern" })) as { outcome: { status: string; exitCode: number | null }; decision: { action: string } | null; payload: { event: string } };
     expect(result.outcome).toMatchObject({ status: "ok", exitCode: 2 });
     expect(result.decision).toMatchObject({ action: "reject" });
     expect(result.payload.event).toBe("message.dispatch");
-    const history = (await harness.behavior.callRpc("history_list", { limit: 5 })) as { hookId: string }[];
-    expect(history[0]?.hookId).toBe("block-pattern");
+    const history = (await harness.behavior.callRpc("history_list", { limit: 5 })) as { runs: { hookId: string }[] };
+    expect(history.runs[0]?.hookId).toBe("block-pattern");
   });
 });
 
@@ -283,23 +305,29 @@ describe("page-only RPC methods", () => {
     expect(((await harness.behavior.callRpc("overview")) as { enabled: boolean }).enabled).toBe(false);
     await harness.behavior.callRpc("settings_set_enabled", { enabled: true });
     await harness.behavior.callRpc("hook_test", { id: "mine" });
-    expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as unknown[]).length).toBe(1);
+    expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as { runs: unknown[] }).runs).toHaveLength(1);
     expect(await harness.behavior.callRpc("history_clear")).toEqual({ removed: 1 });
-    expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as unknown[]).length).toBe(0);
+    expect(((await harness.behavior.callRpc("history_list", { limit: 5 })) as { runs: unknown[] }).runs).toHaveLength(0);
   });
 });
 
 describe("editing a template hook", () => {
   const { bb, harness } = createFakePluginHost({ pluginId: "hooks", settings: { catalogs: "" } });
+  let closeCatalog: (() => Promise<void>) | undefined;
   beforeAll(async () => {
+    const served = await serveCatalog(fixtureCatalog(["slack"]));
+    closeCatalog = served.close;
     await plugin(bb);
+    const added = await harness.behavior.runCli(["marketplace", "add", served.url]);
+    expect(added.exitCode, added.stderr).toBe(0);
   });
   afterAll(async () => {
     await harness.lifecycle.dispose();
+    await closeCatalog?.();
   });
 
   it("re-renders with new settings, keeps a secret when referenced, and drops it when replaced", async () => {
-    await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "https://hooks.slack.test/one" }, events: ["thread.idle"], id: "slack", trusted: false });
+    await harness.behavior.callRpc("template_use", { ref: "slack", params: { webhookUrl: "https://hooks.slack.test/one" }, events: ["thread.idle"], id: "slack", trusted: true });
     let secrets = ((await harness.behavior.callRpc("overview")) as { secrets: { name: string }[] }).secrets.map((secret) => secret.name);
     expect(secrets).toEqual(["slack/webhookUrl"]);
 

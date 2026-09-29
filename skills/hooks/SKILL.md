@@ -15,19 +15,19 @@ Secrets); point them there for browsing and forms, and use the CLI yourself.
 
 | Command | Effect |
 | --- | --- |
-| `bb hooks templates` | List templates: `desktop-notify`, `speak`, `ntfy`, `slack`, `discord`, `telegram`, `webhook`, `log-to-file`, `follow-up`, `review`, `block-pattern`, `office-hours`. |
+| `bb hooks templates` | List templates from subscribed marketplace catalogs. The plugin ships none of its own. |
 | `bb hooks templates <template>` | Show its parameters and an example. |
 | `bb hooks use <template> --set key=value…` | Create hooks from it. `--event` overrides events (repeatable), `--id` renames, `--project`/`--provider`/`--title`/`--text` filter. |
 
-| `bb hooks marketplace add owner/repo` | Subscribe to a catalog (`hooks-catalog.json` in a GitHub repo, an https URL, or `starter`). Then `bb hooks templates --search <text>` and `bb hooks use catalog/template --yes`. |
+| `bb hooks marketplace add owner/repo` | Subscribe to a catalog (`hooks-catalog.json` in a GitHub repo, or an https URL). Then `bb hooks templates --search <text>` and `bb hooks use catalog/template --yes`. |
 | `bb hooks marketplace stats [on\|off]` | Show or set whether new BB Hooks Marketplace installs are reported to its install counter. Leave the choice to the user; never switch it on for them. |
 | `bb hooks secrets set <name> <value>` | Store a credential encrypted; reference it as `{{secret:<name>}}`. Secret template params are stored this way automatically. |
 | `bb hooks export <id>` | Turn a hook into a template JSON for a catalog; `bb hooks marketplace init` prints a starter catalog. |
 
-Prefer a template over a hand-written command when one fits. Examples:
-`bb hooks use desktop-notify`, `bb hooks use slack --set webhookUrl=…`,
-`bb hooks use block-pattern --set 'pattern=\bprod\b' --set 'message=Ask a human.'`,
-`bb hooks use review --set provider=codex --title '^feat'`.
+Prefer a template over a hand-written command when one fits. A fresh install subscribes to `MacHatter1/bb-hooks-marketplace` (catalog name `community`). Examples:
+`bb hooks use community/slack --set webhookUrl=… --yes`,
+`bb hooks use community/block-pattern --set 'pattern=\bprod\b' --set 'message=Ask a human.' --yes`,
+`bb hooks use community/review --set provider=codex --title '^feat' --yes`.
 
 ## Commands
 
@@ -62,7 +62,8 @@ Observe-only (the hook is told after the fact): `thread.created`,
 Gate (the hook's answer is acted on): `message.dispatch` runs before every
 message reaches the provider. Exit 0 proceeds, exit 2 rejects (stderr becomes
 the message the user sees), exit 3 queues the message with stderr as the
-reason. A JSON object on the last stdout line overrides the exit code:
+reason. Any other exit is a failure and the reason names the exit code.
+A JSON object on the last stdout line overrides the exit code:
 `{"action":"reject","message":"…"}`, `{"action":"wait","reason":"…","sendAt":<epoch ms>}`
 or `{"action":"proceed"}`. Gate hooks must answer within 8 seconds.
 

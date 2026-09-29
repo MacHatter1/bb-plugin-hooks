@@ -16,6 +16,7 @@ import {
   type HookEvent,
   type HookInput,
 } from "./definitions.js";
+import { formatMark, rateTemplate } from "./rating.js";
 import { describeDecision, type Decision, type RunOutcome } from "./runner.js";
 import { SECRET_PLACEHOLDER, hookSecretRefs, type SecretStore } from "./secrets.js";
 import { COUNTED_CATALOG, SHARE_INSTALLS, countsInstalls, type InstallStats, type ShareInstalls } from "./stats.js";
@@ -232,6 +233,9 @@ function describeTemplate(entry: RegistryEntry, full: boolean): string {
     `By: ${[template.author ?? "unknown", template.version ? `v${template.version}` : null, template.homepage].filter(Boolean).join(" · ")}`,
     `Kind: ${template.kind}${template.kind === "gate" ? " (message.dispatch only)" : `; default events: ${template.events.join(", ")} (override with --event)`}`,
   ];
+  const rating = rateTemplate(template);
+  lines.push(`Performance: ${formatMark(rating.performance)} — ${rating.performance.reason}`);
+  lines.push(`Security: ${formatMark(rating.security)} — ${rating.security.reason}`);
   if (template.params.length === 0) lines.push("Parameters: none");
   else {
     lines.push("Parameters (--set key=value):");
@@ -332,6 +336,7 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
     const requireId = (what = "a hook id"): PluginCliResult | string => (id === undefined ? fail(`bb hooks ${command} needs ${what}\n\n${USAGE}`) : id);
     const notFound = (hookId: string) => fail(`No hook with id "${hookId}". Run "bb hooks list".`);
 
+    try {
     switch (command) {
       case "list": {
         const hooks = await deps.store.list();
@@ -355,7 +360,7 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
           const sources = deps.marketplace.sources().length;
           return ok(
             `${table(rows, ["TEMPLATE", "SOURCE", "AUTHOR", "KIND", "DEFAULT EVENTS", "WHAT IT DOES"])}\n\nDetails: bb hooks templates <template>   Create: bb hooks use <template> --set key=value` +
-              (sources === 0 ? "\nMore: bb hooks marketplace add owner/repo (or `starter` for the built-in example catalog)" : ""),
+              (sources === 0 ? "\nMore: bb hooks marketplace add owner/repo" : ""),
           );
         }
         const resolved = deps.registry.resolve(id);
@@ -412,7 +417,7 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
             if (records.length === 0) {
               return ok(
                 `No catalogs configured.\n\nAdd one: bb hooks marketplace add owner/repo   (a GitHub repo with ${"hooks-catalog.json"} at its root)\n` +
-                  (aliases.length > 0 ? `Built-in aliases: ${aliases.map(([name]) => name).join(", ")}   e.g. bb hooks marketplace add starter\n` : "") +
+                  (aliases.length > 0 ? `Aliases: ${aliases.map(([name]) => name).join(", ")}\n` : "") +
                   "Publish your own: bb hooks marketplace init > hooks-catalog.json",
               );
             }
@@ -591,7 +596,7 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
         }
         const limit = values.limit === undefined ? 20 : Number(values.limit);
         if (!Number.isInteger(limit) || limit < 1) return fail(`--limit must be a positive integer, got "${values.limit}"`);
-        const runs = deps.history.list({ limit, hookId: values.hook });
+        const { runs } = deps.history.list({ limit, hookId: values.hook });
         if (values.json) return json(runs);
         if (runs.length === 0) return ok("No hook runs recorded yet.");
         const rows = runs.map((run) => [
@@ -608,6 +613,9 @@ export function createCliRun(deps: CliDeps): (argv: string[], ctx: PluginCliCont
       }
       default:
         return fail(`Unknown command "${command}".\n\n${USAGE}`);
+    }
+    } catch (cause) {
+      return fail((cause as Error).message);
     }
   };
 }

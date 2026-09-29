@@ -11,7 +11,7 @@ export default definePluginApp((app) => {
   app.slots.navPanel({
     id: "marketplace",
     title: "Hooks",
-    icon: "Webhook",
+    icon: "hooks/hook",
     path: PANEL_PATH,
     component: HooksPage,
     headerContent: HeaderActions,

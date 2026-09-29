@@ -14,7 +14,7 @@ export type TemplateEntry = Overview["templates"][number];
 export type CatalogRow = Overview["catalogs"][number];
 export type SecretRow = Overview["secrets"][number];
 export type EventInfo = Overview["events"][number];
-export type RunRecordRow = Infer<(typeof rpcContract)["history_list"]["output"]>[number];
+export type RunRecordRow = Infer<(typeof rpcContract)["history_list"]["output"]>["runs"][number];
 export type TestResultRow = Infer<(typeof rpcContract)["hook_test"]["output"]>;
 export type Rpc = ReturnType<typeof useRpc<typeof rpcContract>>;
 
@@ -68,7 +68,7 @@ export function useHistory(limit = 200): { runs: RunRecordRow[] | null; reload: 
   const { rpc } = useOverview();
   const [runs, setRuns] = useState<RunRecordRow[] | null>(null);
   const reload = useCallback(() => {
-    rpc.call("history_list", { limit }).then(setRuns, () => setRuns((prev) => prev ?? []));
+    rpc.call("history_list", { limit }).then((page) => setRuns(page.runs), () => setRuns((prev) => prev ?? []));
   }, [rpc, limit]);
   useEffect(() => {
     reload();

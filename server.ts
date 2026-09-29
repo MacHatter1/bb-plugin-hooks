@@ -4,12 +4,12 @@
 // in the `hooks` setting or with `bb hooks add`. Observe-only lifecycle
 // events fan out to matching hooks after the fact; the `message.dispatch`
 // checkpoint runs matching gate hooks and acts on their answer.
+import { execFileSync } from "node:child_process";
 import type { BbPluginApi, MessageDispatchHookContext, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { CATALOG_MIGRATIONS, createCatalogCache, createRegistry, fetchCatalog, parseSourceInput, type CatalogRecord } from "./src/catalog.js";
 import { removeHook, useTemplate } from "./src/actions.js";
 import { CLI_COMMANDS, createCliRun, type MarketplaceOps, type TestResult } from "./src/cli.js";
-import { STARTER_CATALOG } from "./src/community-catalog.js";
 import {
   EVENT_CATALOG,
   GATE_TIMEOUT_CEILING_MS,
@@ -28,7 +28,6 @@ import { SECRET_MIGRATIONS, createSecretStore, generateKey, hookSecretRefs, type
 import { SHARE_INSTALLS, type InstallStats, type ShareInstalls } from "./src/stats.js";
 import { sendInstallReport } from "./src/stats-report.js";
 import { HISTORY_MIGRATIONS, createHistoryStore, createHookStore, type HookStore } from "./src/store.js";
-import { TEMPLATES } from "./src/templates.js";
 
 export { type HookDefinition } from "./src/definitions.js";
 export { rpcContract } from "./src/rpc.js";
@@ -38,6 +37,22 @@ const CHANGED = "hooks-changed";
 
 /** Total time the dispatch handler may spend; core fails the attempt at 10 s. */
 const DISPATCH_BUDGET_MS = 8_500;
+
+/** Absolute path to `bb` for command hooks, when this process can see one. */
+function resolveBbCli(): string | null {
+  const fromEnv = process.env.BB_CLI?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const bin = process.platform === "win32" ? "where.exe" : "which";
+    const found = execFileSync(bin, ["bb"], { encoding: "utf8", timeout: 1_000, windowsHide: true })
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line !== "");
+    return found ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const hooksSettingSchema = z.string().superRefine((value, ctx) => {
   const parsed = parseHooksJson(value);
@@ -78,9 +93,9 @@ export default async function plugin(bb: BbPluginApi) {
     catalogs: {
       type: "string",
       label: "Marketplace catalogs",
-      description: "One per line: an https URL of a hooks-catalog.json, a GitHub owner/repo, or `starter`. `bb hooks marketplace add` writes here too.",
+      description: "One per line: an https URL of a hooks-catalog.json, or a GitHub owner/repo. `bb hooks marketplace add` writes here too.",
       experimental_multiline: true,
-      default: "starter\nMacHatter1/bb-hooks-marketplace",
+      default: "MacHatter1/bb-hooks-marketplace",
     },
     shareInstalls: {
       type: "select",
@@ -162,12 +177,11 @@ export default async function plugin(bb: BbPluginApi) {
     },
   };
 
-  // --- Marketplace: catalog sources come from the `catalogs` setting; fetched
-  // documents are cached in the database and merged with the bundled templates.
+  // --- Marketplace: every template comes from a catalog in the `catalogs` setting.
+  // Fetched documents are cached in the database. The plugin ships none of its own.
   const catalogCache = createCatalogCache(db);
   function aliases(): Record<string, string> {
-    const base = serverUrl();
-    return base === null ? {} : { starter: `${base}/api/v1/plugins/${bb.pluginId}/http/catalog` };
+    return {};
   }
   function sourceLines(): string[] {
     return current.catalogs
@@ -188,7 +202,7 @@ export default async function plugin(bb: BbPluginApi) {
     const urls = configuredUrls();
     return urls.map((url) => catalogCache.get(url) ?? { url, name: null, etag: null, fetchedAt: null, catalog: null, error: "not fetched yet" });
   }
-  const registry = createRegistry(TEMPLATES, () => records());
+  const registry = createRegistry([], () => records());
 
   async function refreshUrl(url: string, signal?: AbortSignal): Promise<CatalogRecord> {
     const previous = catalogCache.get(url);
@@ -203,7 +217,12 @@ export default async function plugin(bb: BbPluginApi) {
       record = { url, name: previous?.name ?? null, etag: previous?.etag ?? null, fetchedAt: previous?.fetchedAt ?? null, catalog: previous?.catalog ?? null, error: message };
       bb.log.warn(`catalog ${url}: ${message}`);
     }
-    catalogCache.put(record);
+    try {
+      catalogCache.put(record);
+    } catch (cause) {
+      bb.log.debug(`catalog cache write skipped: ${(cause as Error).message}`);
+      return record;
+    }
     notify("catalogs");
     return record;
   }
@@ -262,10 +281,6 @@ export default async function plugin(bb: BbPluginApi) {
     },
   };
 
-  // The plugin serves its own starter catalog: the worked example of a
-  // published hooks-catalog.json, subscribed to with `marketplace add starter`.
-  bb.http.route("GET", "/catalog", () => Response.json(STARTER_CATALOG));
-
   bb.background.service("catalog-refresh", {
     async start(signal) {
       await refreshAll(signal);
@@ -296,6 +311,8 @@ export default async function plugin(bb: BbPluginApi) {
     }
   }
 
+  const bbCli = resolveBbCli();
+
   /** Exactly what a hook receives: the JSON payload and the BB_* environment. */
   function buildDelivery(hook: HookDefinition, prepared: PreparedEvent, startedAt: number): { payload: Record<string, unknown>; env: Record<string, string> } {
     const url = serverUrl();
@@ -307,7 +324,12 @@ export default async function plugin(bb: BbPluginApi) {
         serverUrl: url,
         ...prepared.payload,
       },
-      env: { ...prepared.env, BB_HOOK_ID: hook.id, ...(url === null ? {} : { BB_SERVER_URL: url }) },
+      env: {
+        ...prepared.env,
+        BB_HOOK_ID: hook.id,
+        ...(url === null ? {} : { BB_SERVER_URL: url }),
+        ...(bbCli === null ? {} : { BB_CLI: bbCli }),
+      },
     };
   }
 
@@ -447,8 +469,11 @@ export default async function plugin(bb: BbPluginApi) {
         const remaining = deadline - Date.now();
         let decision: Decision;
         if (remaining < 250) {
+          const startedAt = Date.now();
+          const outcome: RunOutcome = { status: "timeout", exitCode: null, httpStatus: null, stdout: "", stderr: "", durationMs: 0, error: "dispatch budget exhausted" };
+          decision = decide(hook, outcome).decision;
+          record(hook, prepared, outcome, decision, startedAt);
           bb.log.warn(`hook "${hook.id}" skipped: dispatch budget exhausted by earlier gate hooks`);
-          decision = decide(hook, { status: "timeout", exitCode: null, httpStatus: null, stdout: "", stderr: "", durationMs: 0, error: "dispatch budget exhausted" }).decision;
         } else {
           const outcome = await execute(hook, prepared, {
             runner: gateRunner,
@@ -547,7 +572,7 @@ export default async function plugin(bb: BbPluginApi) {
       const result = await test(hook, threadId ?? null);
       return { outcome: result.outcome, decision: result.decision, payload: result.payload };
     },
-    history_list: ({ limit, hookId }) => history.list({ limit, hookId }),
+    history_list: ({ limit, offset, hookId, status }) => history.list({ limit, offset, hookId, status }),
     async catalog_add({ source }) {
       const result = await marketplace.add(source);
       if ("error" in result) throw new Error(result.error);
