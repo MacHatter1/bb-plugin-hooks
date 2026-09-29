@@ -6,25 +6,19 @@ All notable changes to Hooks are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-29
+
 ### Added
 
 - Browse templates by category, with the author and a performance and security score out of 100 (with a letter grade) taken from what each template runs.
+- Group marketplace listings by category, sort results, switch between card and list views, and browse catalog banners.
 - Report anonymous install counts for the BB Hooks Marketplace catalog, once the user agrees. BB asks on the first install from it and sends only the template id and version, with a proof-of-work challenge that makes fake counts expensive. No other catalog is ever reported. Change the answer with `bb hooks marketplace stats` or the `shareInstalls` setting.
+- Pass `BB_CLI` to command hooks when the server can resolve the `bb` binary.
 
 ### Changed
 
 - The plugin no longer ships its own hooks. Templates come from the marketplace catalog, which a new install subscribes to.
 - The run log is paged, 25 runs at a time, including when filtered by hook or failure.
-
-## 0.4.0 - 2026-09-28
-
-### Added
-
-- Group marketplace listings by category, sort results, switch between card and list views, and browse catalog banners.
-- Pass `BB_CLI` to command hooks when the server can resolve the `bb` binary.
-
-### Changed
-
 - Sync the Plugin SDK declarations and preserve dispatch payload compatibility across SDK context versions.
 
 ### Fixed
