@@ -6,6 +6,12 @@ All notable changes to Hooks are documented here. The format follows
 
 ## Unreleased
 
+## 0.4.1 - 2026-10-01
+
+### Fixed
+
+- Pin `@hugeicons/core-free-icons` to 4.3.5. Release 4.3.4 points its icon barrel at filenames such as `Grid2x2Icon.js` while the file on disk is `Grid2X2Icon.js`, so a clean production bundle fails on a case-sensitive filesystem.
+
 ## 0.4.0 - 2026-09-29
 
 ### Added
